@@ -1,0 +1,96 @@
+{
+    "scheme": {
+        "name": "lotos-euros",
+        "run": "node"
+    },
+    "node": {
+        "gpu": false,
+        "node_id": "7",
+        "core_demand": 1,
+        "auto_node_selection": true,
+        "random_node": true,
+        "max_core_num": 32,
+        "load_max": 30,
+        "mem_min": 30
+    },
+    "lotos-euros": {
+        "path": {
+            "model_path": "/home/pangmj/TNO/lotos-euros/v2.2_reanalysis_ensemble",
+            "model_bashrc_path": "/home/pangmj/TNO/env_bash/bashrc_lotos-euros_v22",
+            "model_output_path": "/home/pangmj/TNO/scratch/projects",
+            "backup_path": "/home/pangmj/backup/lotos_euros/v2.2_reanalysis_ensemble"
+        },
+        "run_project": "Reanalysis2021",
+        "version": "v2.2",
+        "run_type": "ensemble",
+        "run_method": "batch",
+        "max_retry": 0,
+        "ensemble_number": 32,
+        "nspec": 5,
+        "nlevel": 21,
+        "start_lon": 70,
+        "end_lon": 140,
+        "res_lon": 0.25,
+        "nlon": 280,
+        "start_lat": 15,
+        "end_lat": 50,
+        "res_lat": 0.25,
+        "nlat": 140,
+        "iteration_num": 0,
+        "output_time_interval": "3H",
+        "rc": {
+            "lotos-euros.rc": {
+                "le.restart": "T",
+                "le.restart.save.dhour": "6"
+            },
+            "lotos-euros-output.rc": {
+                "my.output.dhour": "3.0"
+            }
+        },
+        "post_process": {
+            "save_method": "merge",
+            "save_tool": "mv",
+            "data_type": "output",
+            "product": [
+                "conc-3d"
+            ],
+            "plot_results": true,
+            "run_spec": [
+                "gate",
+                8
+            ],
+            "plot_forecast": true,
+            "with_observation": true
+        }
+    },
+    "pangu": {
+        "path": {
+            "model_path": "/home/pangmj/Model/Pangu/model",
+            "model_output_path": ""
+        },
+        "run_project": "Pangu",
+        "version": "v1",
+        "run_type": "single",
+        "parallel_mode": "mpi",
+        "ensemble_number": 2,
+        "forecast_type": 24,
+        "output_time_interval": "6H",
+        "nlon": 1440,
+        "nlat": 721,
+        "nlevel": 13,
+        "post_process": {
+            "save_method": "merge",
+            "product": [
+                "surface",
+                "upper"
+            ],
+            "plot_results": true,
+            "run_spec": [
+                "gate",
+                16
+            ],
+            "plot_forecast": true,
+            "with_observation": true
+        }
+    }
+}

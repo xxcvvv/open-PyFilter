@@ -1,0 +1,20 @@
+{
+    "System": {
+        "name": "PyFilter",
+        "version": 1.1,
+        "log_level": "DEBUG",
+        "forecast_mode": false
+    },
+    "User": {
+        "Author": "Pang Mijie",
+        "Institute": "NUIST"
+    },
+    "Machine": {
+        "Host": "zijin",
+        "management": "SGE"
+    },
+    "path": {
+        "output_path": "/home/pangmj/Data/pyFilter/projects",
+        "my_python": "/home/pangmj/package/anaconda/envs/ve/bin/python"
+    }
+}

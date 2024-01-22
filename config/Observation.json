@@ -1,0 +1,42 @@
+{
+    "path": "/home/pangmj/Data/pyFilter/observation",
+    "observation_list": [
+        "bc_pm10"
+    ],
+    "bc_pm10": {
+        "dir_name": "Asml_PM10_UTC",
+        "type": 1,
+        "product": "concentration",
+        "description": "",
+        "source": "MEE"
+    },
+    "modis_dod": {
+        "dir_name": "Asml_MODIS_DOD_UTC",
+        "type": 2,
+        "api": {},
+        "product": "AOD",
+        "description": "",
+        "source": "NASA"
+    },
+    "viirs_dod": {
+        "dir_name": "Asml_VIIRS_DOD_UTC",
+        "type": 2,
+        "api": {},
+        "product": "AOD",
+        "description": "",
+        "source": "NASA"
+    },
+    "himawari-8": {
+        "dir": "",
+        "api": {},
+        "product": "AOD",
+        "description": "",
+        "source": "JAXA"
+    },
+    "meteo_ground": {
+        "dir": "",
+        "product": [],
+        "description": "",
+        "source": ""
+    }
+}

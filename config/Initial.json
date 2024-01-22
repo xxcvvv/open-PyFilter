@@ -1,0 +1,43 @@
+{
+    "generate_run_time": {
+        "scheme": "equal_step",
+        "equal_step": {
+            "first_run_time": "2021-03-01 03:00:00",
+            "last_run_time": "2021-05-31 21:00:00",
+            "run_time_range": "24H",
+            "asml_time_interval": "3H"
+        },
+        "assign": {
+            "path": ""
+        }
+    },
+    "jobs": [
+        "initial_run"
+    ],
+    "install_restart": {
+        "time": ""
+    },
+    "initial_run": {
+        "start_time": "2021-03-01 00:00:00",
+        "end_time": "2021-03-01 03:00:00",
+        "backup": false,
+        "node": {
+            "auto_node_selection": true,
+            "node_id": "4",
+            "reserve": 0,
+            "random_choice": true,
+            "load_max": 25,
+            "mem_min": 10,
+            "max_core_num": 32
+        },
+        "rc": {
+            "lotos-euros.rc": {
+                "le.restart": "F",
+                "le.restart.save.dhour": "24"
+            },
+            "lotos-euros-output.rc": {
+                "my.output.dhour": "1.0"
+            }
+        }
+    }
+}

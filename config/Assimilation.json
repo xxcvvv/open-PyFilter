@@ -1,0 +1,51 @@
+{
+    "scheme": {
+        "name": "enkf_fast",
+        "run": "node"
+    },
+    "node": {
+        "auto_node_selection": true,
+        "node_id": "4",
+        "core_demand": 8,
+        "load_max": 60,
+        "mem_min": 20,
+        "reserve": 0
+    },
+    "enkf": {
+        "project_name": "test",
+        "write_restart": true,
+        "use_localization": true,
+        "distance_threshold": 500
+    },
+    "enkf_fast": {
+        "project_name": "test",
+        "write_restart": true,
+        "use_localization":true,
+        "distance_threshold": 500
+    },
+    "ntenkf_hybrid": {
+        "project_name": "test",
+        "write_restart": true,
+        "use_localization": false,
+        "distance_threshold": 500,
+        "execute_time_point": "2021-03-15 08:00:00",
+        "ensemble_set": [
+            32,
+            32,
+            32
+        ],
+        "time_set": [
+            -2,
+            0,
+            2
+        ]
+    },
+    "post_process": {
+        "plot_results": true,
+        "with_observation": true,
+        "plot_priori": true,
+        "plot_posteriori": true,
+        "save_variables": true,
+        "save_method": "nc"
+    }
+}

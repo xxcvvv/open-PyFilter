@@ -1,0 +1,14 @@
+others
+__pycache__
+*.log
+*.out
+*.pyc
+*test*
+*dev*
+*.json
+*.mod
+*.so
+*.drawio
+*.png
+*.sh
+!Script.json

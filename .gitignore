@@ -8,7 +8,8 @@ __pycache__
 # *.json
 *.mod
 *.so
-*.drawio
+*.drawio*
 *.png
 *.sh
+
 !Script.json

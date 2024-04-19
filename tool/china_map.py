@@ -1,27 +1,29 @@
 '''
 Autor: Mijie Pang
 Date: 2023-04-24 09:07:15
-LastEditTime: 2023-11-01 21:31:42
+LastEditTime: 2024-04-17 19:23:15
 Description: designed for a flexible map plot
 '''
 import os
+import logging
 import warnings
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.colors import ListedColormap, BoundaryNorm, LogNorm
 from datetime import datetime
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.io.shapereader import Reader
-# from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter, LatitudeLocator
-from matplotlib.colors import ListedColormap, BoundaryNorm, LogNorm
+
+from decorators import deprecated
 
 warnings.filterwarnings(action='ignore')
-shp_dir = '/home/pangmj/package/shp_file'
-# shp_dir = '/home/pangmj/package/shp_file/china'
+shp_dir = '/home/pangmj/package/shp_file/china'
 
 
+@deprecated
 class my_map:
 
     def __init__(self,
@@ -46,18 +48,18 @@ class my_map:
                  colorbar_pad=0.01,
                  colorbar_norm='default',
                  extent=[80, 134.1, 15.5, 52.5],
-                 quick=False,
                  map2=True,
                  display_colorbar=True,
                  display_gridline=True,
                  display_axis=True,
                  display_coastline=True,
-                 colormap=None) -> None:
+                 colormap=None,
+                 **kwargs) -> None:
 
-        if not os.path.exists(shp_dir):
-            raise RuntimeError('shape file not found')
+        logging.info('Plot project initiated')
 
-        print('plot project initiated')
+        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+        logging.getLogger('fiona').setLevel(logging.WARNING)
 
         ### initialize the figure ###
         fig = plt.figure(figsize=figsize, dpi=dpi)
@@ -92,41 +94,29 @@ class my_map:
         #     edgecolor='k',
         #     linewidth=0.1,
         # )
-        if not quick:
 
-            ax.add_geometries(
-                Reader(shp_dir + '/china1.shp').geometries(),
-                ccrs.PlateCarree(),
-                facecolor='none',
-                edgecolor='k',
-                linewidth=0.6,
-            )
-            ax.add_geometries(
-                Reader(shp_dir + '/china2.shp').geometries(),
-                ccrs.PlateCarree(),
-                facecolor='none',
-                edgecolor='k',
-                linewidth=0.1,
-            )
+        ax.add_geometries(
+            Reader(shp_dir + '/china1.shp').geometries(),
+            ccrs.PlateCarree(),
+            facecolor='none',
+            edgecolor='k',
+            linewidth=0.6,
+        )
+        ax.add_geometries(
+            Reader(shp_dir + '/china2.shp').geometries(),
+            ccrs.PlateCarree(),
+            facecolor='none',
+            edgecolor='k',
+            linewidth=0.1,
+        )
 
-            # ax.add_geometries(
-            #     Reader(shp_dir + '/bou1_4l.shp').geometries(),
-            #     ccrs.PlateCarree(),
-            #     facecolor='none',
-            #     edgecolor='k',
-            #     linewidth=0.6,
-            # )            
-
-        else:
-
-            ax.add_geometries(
-                Reader(shp_dir +
-                       '/china_shp/Province/Province.shp').geometries(),
-                ccrs.PlateCarree(),
-                facecolor='none',
-                edgecolor='k',
-                linewidth=0.5,
-            )
+        # ax.add_geometries(
+        #     Reader(shp_dir + '/bou1_4l.shp').geometries(),
+        #     ccrs.PlateCarree(),
+        #     facecolor='none',
+        #     edgecolor='k',
+        #     linewidth=0.6,
+        # )
 
         # ax.add_geometries(
         #     Reader("{}/ne_10m_land.shp".format(shp_dir)).geometries(),
@@ -136,7 +126,7 @@ class my_map:
         #     linewidth=0.5,
         # )
 
-        ### grid line ###
+        ### *--- grid line ---* ###
         if display_gridline:
 
             gl = ax.gridlines(
@@ -167,7 +157,7 @@ class my_map:
                            vmax=np.max(bounds),
                            extend=colorbar_extend)
 
-        ### colorbar ###
+        ### *--- colorbar ---* ###
         if display_colorbar:
 
             colorbar = plt.colorbar(
@@ -184,9 +174,9 @@ class my_map:
             )
             # print( color_bar.ax.get_position())
 
-        #################################
-        ###          subplot          ###
-        if not quick and map2:
+        ### *---------------------------* ###
+        ### *---       subplot       ---* ###
+        if map2:
 
             map2 = ccrs.LambertConformal(central_longitude=115,
                                          central_latitude=12.5,
@@ -194,21 +184,21 @@ class my_map:
             ax2 = fig.add_axes([0.7, 0.14, 0.2, 0.2],
                                projection=map2)  # left,bottom,width,height
             ax2.set_extent([105.8, 122, 0, 25])
-            # ax2.add_feature(cfeature.OCEAN.with_scale('110m'))
-            # ax2.add_geometries(
-            #     Reader("{!s}/china1.shp".format(shp_dir)).geometries(),
-            #     ccrs.PlateCarree(),
-            #     facecolor='none',
-            #     edgecolor='k',
-            #     linewidth=0.5,
-            # )
-            # ax2.add_geometries(
-            #     Reader("{}/ne_10m_land.shp".format(shp_dir)).geometries(),
-            #     ccrs.PlateCarree(),
-            #     facecolor='none',
-            #     edgecolor='k',
-            #     linewidth=0.5,
-            # )
+            ax2.add_feature(cfeature.OCEAN.with_scale('110m'))
+            ax2.add_geometries(
+                Reader('%s/china1.shp' % (shp_dir)).geometries(),
+                ccrs.PlateCarree(),
+                facecolor='none',
+                edgecolor='k',
+                linewidth=0.5,
+            )
+            ax2.add_geometries(
+                Reader('%s/ne_10m_land.shp' % (shp_dir)).geometries(),
+                ccrs.PlateCarree(),
+                facecolor='none',
+                edgecolor='k',
+                linewidth=0.5,
+            )
             lb2 = ax2.gridlines(
                 draw_labels=False,
                 x_inline=False,
@@ -248,7 +238,7 @@ class my_map:
             bounds = self.bounds
 
         position = self.fig.add_axes(position)
-        cbar = self.plt.colorbar(
+        cbar = plt.colorbar(
             mpl.cm.ScalarMappable(cmap=cmap, norm=norm),
             ax=self.ax,
             boundaries=bounds,  # Adding values for extensions.
@@ -261,7 +251,7 @@ class my_map:
         cbar.ax.yaxis.set_ticks_position(ticks_position)
         # print(cbar.ax.get_position())
 
-    ### plot scatter ###
+    ### *--- plot scatter ---* ###
     def scatter(self,
                 lon: np.ndarray,
                 lat: np.ndarray,
@@ -294,26 +284,30 @@ class my_map:
             cmap = ListedColormap(colors)
             norm = BoundaryNorm(bounds, cmap.N)
 
-        self.ax.scatter(lon,
-                        lat,
-                        s=size,
-                        c=value,
-                        edgecolor=edgecolor,
-                        linewidths=linewidths,
-                        transform=ccrs.PlateCarree(),
-                        cmap=cmap,
-                        norm=norm,
-                        marker=marker,
-                        alpha=alpha,
-                        **kwargs)
+        ax = plt.gca()
 
-    ### plot line ###
+        ax.scatter(lon,
+                   lat,
+                   s=size,
+                   c=value,
+                   edgecolor=edgecolor,
+                   linewidths=linewidths,
+                   transform=ccrs.PlateCarree(),
+                   cmap=cmap,
+                   norm=norm,
+                   marker=marker,
+                   alpha=alpha,
+                   **kwargs)
+
+    ### *--- plot line ---* ###
     def line(self,
              region_dict: dict,
              smooth=20,
              linewidth=1,
              color='black',
              **kwargs) -> None:
+
+        ax = plt.gca()
 
         for key in region_dict:
             loc = region_dict[key]
@@ -327,13 +321,13 @@ class my_map:
                                               loc[k + 1]) * (s / smooth)
                     end_lat = loc[k + 1] + (loc[k + 3] - loc[k + 1]) * (
                         (s + 1) / smooth)
-                    self.ax.plot([start_lon, end_lon], [start_lat, end_lat],
-                                 c=color,
-                                 lw=linewidth,
-                                 transform=ccrs.PlateCarree(),
-                                 **kwargs)
+                    ax.plot([start_lon, end_lon], [start_lat, end_lat],
+                            c=color,
+                            lw=linewidth,
+                            transform=ccrs.PlateCarree(),
+                            **kwargs)
 
-    ### plot contour ###
+    ### *--- plot contour ---* ###
     def contourf(self,
                  lon: np.ndarray,
                  lat: np.ndarray,
@@ -345,16 +339,17 @@ class my_map:
         if meshgrid:
             lon, lat = np.meshgrid(lon, lat)
 
-        c1 = self.ax.contourf(lon,
-                              lat,
-                              data,
-                              levels=levels,
-                              transform=ccrs.PlateCarree(),
-                              cmap=self.cmap,
-                              norm=self.norm,
-                              **kwargs)
+        ax = plt.gca()
+        c1 = ax.contourf(lon,
+                         lat,
+                         data,
+                         levels=levels,
+                         transform=ccrs.PlateCarree(),
+                         cmap=self.cmap,
+                         norm=self.norm,
+                         **kwargs)
 
-    ### plot quivers ###
+    ### *--- plot quivers ---* ###
     def quiver(self,
                lon: np.ndarray,
                lat: np.ndarray,
@@ -370,18 +365,19 @@ class my_map:
         if meshgrid:
             lon, lat = np.meshgrid(lon, lat)
 
-        self.quiver = self.ax.quiver(lon,
-                                     lat,
-                                     u,
-                                     v,
-                                     color=color,
-                                     width=width,
-                                     scale=scale,
-                                     headwidth=headwidth,
-                                     transform=ccrs.PlateCarree(),
-                                     **kwargs)
+        ax = plt.gca()
+        self.quiver = ax.quiver(lon,
+                                lat,
+                                u,
+                                v,
+                                color=color,
+                                width=width,
+                                scale=scale,
+                                headwidth=headwidth,
+                                transform=ccrs.PlateCarree(),
+                                **kwargs)
 
-    ### add the key to the quivers ###
+    ### *--- add the key to the quivers ---* ###
     def quiverkey(self,
                   key_position=[0.95, 1.02],
                   length=10,
@@ -393,34 +389,39 @@ class my_map:
 
         default_font = {'size': 10, 'family': 'Times New Roman'}
         default_font.update(font)
-        self.ax.quiverkey(self.quiver,
-                          key_position[0],
-                          key_position[1],
-                          length,
-                          label=label,
-                          labelsep=labelsep,
-                          labelpos=labelpos,
-                          fontproperties=default_font,
-                          **kwargs)
+        ax = plt.gca()
+        ax.quiverkey(self.quiver,
+                     key_position[0],
+                     key_position[1],
+                     length,
+                     label=label,
+                     labelsep=labelsep,
+                     labelpos=labelpos,
+                     fontproperties=default_font,
+                     **kwargs)
 
-    ### add text ###
+    ### *--- add text ---* ###
     def text(self, location: list, text: str, fontsize=12, **kwargs) -> None:
 
         x_location, y_location = location
-        ax2 = self.plt.gca()
-        self.plt.text(x_location,
-                      y_location,
-                      text,
-                      transform=ax2.transAxes,
-                      fontsize=fontsize,
-                      **kwargs)
+        ax2 = plt.gca()
+        plt.text(x_location,
+                 y_location,
+                 text,
+                 transform=ax2.transAxes,
+                 fontsize=fontsize,
+                 **kwargs)
 
-    ### save figure ###
+    ### *--- save figure ---* ###
     def save(self,
              name='Dafault',
              path='.',
              create_dir=False,
+             display_legend=False,
              **kwargs) -> None:
+
+        if display_legend:
+            plt.legend(fontsize=12)
 
         if create_dir:
             if not os.path.exists(path):
@@ -433,225 +434,16 @@ class my_map:
 
         plt.savefig(os.path.join(path, name), bbox_inches='tight', **kwargs)
 
-        print('Plot took %s s' % (round(
-            (datetime.now() - self.start).total_seconds(), 1)))
+        logging.info('Plot took %.2f s' %
+                     ((datetime.now() - self.start).total_seconds()))
 
     def close(self):
         plt.close()
 
 
 if __name__ == '__main__':
-    # case1
+
     mmp = my_map()
     mmp.scatter(110, 30, 100)
     mmp.line({'line': [85, 31, 130, 50]})
     mmp.save('test.png')
-
-
-class my_map_multi:
-
-    # initial
-    def __init__(self,
-                 figsize=[8, 5],
-                 dpi=300,
-                 colors=[
-                     '#F0F0F0',
-                     '#F0F096',
-                     '#FA9600',
-                     '#FA0064',
-                     '#9632FA',
-                     '#6496FA',
-                     '#1414FA',
-                     '#141414',
-                 ],
-                 bounds=[0, 20, 40, 60, 80, 100, 120, 140]):
-
-        self.figsize = figsize
-        self.dpi = dpi
-        self.colors = colors
-        self.bounds = bounds
-        self.start = datetime.now()
-
-        print('plot project initiated')
-        fig = plt.figure(figsize=self.figsize, dpi=self.dpi)
-        plt.rcParams['font.family'] = 'Times New Roman'
-        map = ccrs.LambertConformal(central_longitude=107.5,
-                                    central_latitude=36.0,
-                                    standard_parallels=(25, 47))
-        plt.rcParams['font.size'] = 12
-        plt.tick_params(labelsize=12)
-        plt.clf()
-        self.fig = fig
-        self.map = map
-
-    # subplot
-    def subplot(self,
-                f1,
-                f2,
-                num,
-                title=str(datetime.now())[:16],
-                display_colorbar=True):
-
-        ax = self.fig.add_subplot(f1, f2, num, projection=self.map)
-        ax.set_extent([80, 134.1, 15.5, 52.5])
-        ax.set_title(title, {'size': 14, 'color': 'k'})
-        ax.add_feature(cfeature.COASTLINE, lw=0.3)
-        # ax.add_feature(cfeature.OCEAN.with_scale('110m'))
-        # ax.add_feature(cfeature.LAND.with_scale('110m'))
-        ax.add_geometries(
-            Reader("{!s}/china1.shp".format(shp_dir)).geometries(),
-            ccrs.PlateCarree(),
-            facecolor='none',
-            edgecolor='k',
-            linewidth=0.5,
-        )
-        ax.add_geometries(
-            Reader("{!s}/china2.shp".format(shp_dir)).geometries(),
-            ccrs.PlateCarree(),
-            facecolor='none',
-            edgecolor='k',
-            linewidth=0.1,
-        )
-        # ax.add_geometries(Reader("{}/ne_10m_land.shp".format(shp_dir) ).geometries(), \
-        #                       ccrs.PlateCarree(), facecolor='none', edgecolor='k', linewidth=0.5)
-        gl = ax.gridlines(
-            draw_labels=False,
-            x_inline=False,
-            y_inline=False,
-            linewidth=0.1,
-            color='gray',
-            alpha=0.8,
-            linestyle='--',
-        )
-        gl.xlocator = mticker.FixedLocator(range(0, 180, 10))
-        gl.ylocator = mticker.FixedLocator(range(0, 90, 10))
-        gl = ax.gridlines(
-            draw_labels=True,
-            x_inline=False,
-            y_inline=False,
-            linewidth=0.1,
-            color='gray',
-            alpha=0.8,
-            linestyle='--',
-        )
-        gl.top_labels = False
-        gl.right_labels = False
-        gl.xlocator = mticker.FixedLocator(range(80, 135, 10))
-        gl.ylocator = mticker.FixedLocator(range(20, 50, 10))
-        gl.ylabel_style = {'size': 12, 'color': 'k'}
-        gl.xlabel_style = {'size': 12, 'color': 'k'}
-        gl.rotate_labels = False
-
-        self.cmap = ListedColormap(self.colors)
-        self.norm = BoundaryNorm(self.bounds, self.cmap.N)
-        self.ax = ax
-
-        if display_colorbar:
-            # my_map_multi.colorbar(self)
-            self.colorbar()
-
-        print('subplot created : %s / %s' % (num, f1 * f2))
-
-        ################ subplot #################
-        # map2 = ccrs.LambertConformal(central_longitude=115, central_latitude=12.5, \
-        #                             standard_parallels=(3,20))
-        # ax2  = self.fig.add_axes([0.7187, 0.156, 0.2, 0.2],projection=map2)  #left,bottom,width,height
-        # ax2.set_extent([105.8, 122, 0, 25])
-        # ax2.add_feature(cfeature.OCEAN.with_scale('110m'))
-        # ax2.add_geometries(Reader("{!s}/china1.shp".format(shp_dir)   ).geometries(), \
-        #                     ccrs.PlateCarree(), facecolor='none',edgecolor='k',linewidth=0.5)
-        # ax2.add_geometries(Reader("{}/ne_10m_land.shp".format(shp_dir)).geometries(), \
-        #                     ccrs.PlateCarree(), facecolor='none',edgecolor='k',linewidth=0.5)
-        # lb2 = ax2.gridlines(draw_labels=False,x_inline=False, y_inline=False,linewidth=0.1, \
-        #                     color='gray', alpha=0.8, linestyle='--' )
-        # lb2.xlocator = mticker.FixedLocator(range(90, 135, 5))
-        # lb2.ylocator = mticker.FixedLocator(range( 0,  90, 5))
-
-    ### colorbar ###
-    def colorbar(self):
-
-        cb = plt.colorbar(
-            mpl.cm.ScalarMappable(cmap=self.cmap, norm=self.norm),
-            ax=self.ax,
-            boundaries=self.bounds,  # Adding values for extensions.
-            extend='max',  # {'neither', 'both', 'min', 'max'}
-            ticks=self.bounds,
-            # spacing = 'proportional',
-            shrink=0.9,
-            pad=0.01,
-            aspect=20,  # aspect控制bar宽度
-            fraction=0.03,  # fraction控制大小比例
-        )
-        # cb.ax.set_title(r'$\mu'+'g/m$^{2}$',fontsize=12.5)
-
-    # plot scatter
-    def scatter(self, lon, lat, data, size=8, linewidths=0.3, meshgrid=True):
-
-        if meshgrid:
-            lon, lat = np.meshgrid(lon, lat)
-
-        c1 = self.ax.scatter(
-            lon,
-            lat,
-            s=size,
-            c=data,
-            edgecolor='black',
-            linewidths=linewidths,
-            transform=ccrs.PlateCarree(),
-            cmap=self.cmap,
-            norm=self.norm,
-        )
-
-    # plot line
-    def line(self, region_dict, smooth=20):
-
-        for key in region_dict:
-            loc = region_dict[key]
-            num = int(len(loc) / 2) - 1
-            for j in range(num):
-                k = 2 * j
-                for s in range(smooth):
-                    start_lon = loc[k] + (loc[k + 2] - loc[k]) * (s / smooth)
-                    end_lon = loc[k] + (loc[k + 2] - loc[k]) * (s + 1) / smooth
-                    start_lat = loc[k + 1] + (loc[k + 3] -
-                                              loc[k + 1]) * (s / smooth)
-                    end_lat = loc[k + 1] + (loc[k + 3] - loc[k + 1]) * (
-                        (s + 1) / smooth)
-                    self.ax.plot(
-                        [start_lon, end_lon],
-                        [start_lat, end_lat],
-                        c='black',
-                        lw=1,
-                        transform=ccrs.PlateCarree(),
-                    )
-
-    # plot contour
-    def contour(self, lon, lat, data):
-
-        lon, lat = np.meshgrid(lon, lat)
-        c1 = self.ax.contourf(lon,
-                              lat,
-                              data,
-                              transform=ccrs.PlateCarree(),
-                              cmap=self.cmap,
-                              norm=self.norm)
-
-    # save figure
-    def save(self, path):
-        plt.savefig(path, bbox_inches='tight')
-        start = self.start
-        end = datetime.now()
-        print('took : ' + str((end - start).total_seconds())[:-4] + ' s')
-
-
-# if __name__ == '__main__':
-#     # case2
-#     map = my_map_multi(figsize=[16, 10])
-#     map.subplot(2, 2, 1)
-#     map.scatter(110, 30, 100)
-#     map.line({'line': [80, 25, 130, 31]})
-#     map.subplot(2, 2, 2, title='scatter')
-#     map.subplot(2, 2, 3)
-#     map.subplot(2, 2, 4)
-#     map.line({'line': [85, 31, 130, 50]})
-#     map.save('/home/pangmj/temp/test2.png')

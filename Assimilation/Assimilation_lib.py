@@ -1,22 +1,13 @@
 '''
 Autor: Mijie Pang
 Date: 2023-04-22 19:15:58
-LastEditTime: 2023-09-21 21:29:07
+LastEditTime: 2024-04-03 21:40:48
 Description: this script is the library for the assimilation algorithms
 '''
 import os
 import numpy as np
 from numpy.linalg import inv
 import netCDF4 as nc
-
-
-def find_nearest(point: float, line: list) -> int:
-    line = np.asarray(line)
-    if point > np.max(line) or point < np.min(line):
-        return np.nan
-    else:
-        idx = np.argmin(np.abs(line - point))
-        return idx
 
 
 def calculate_covariance_matrix(

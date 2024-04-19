@@ -1,104 +1,114 @@
 '''
 Autor: Mijie Pang
 Date: 2023-09-23 16:44:44
-LastEditTime: 2024-01-08 20:52:13
+LastEditTime: 2024-04-05 20:02:58
 Description: 
 '''
 import logging
 import numpy as np
+# from memory_profiler import profile
 
 
-class Local_class:
+class Localization:
 
-    def __init__(self,
-                 x1_lon: np.ndarray,
-                 x1_lat: np.ndarray,
-                 x2_lon: np.ndarray,
-                 x2_lat: np.ndarray,
-                 distance_threshold: int,
-                 distance_cal='empirical',
-                 **kwargs) -> None:
+    def __init__(self, lon1: np.ndarray, lat1: np.ndarray, lon2: np.ndarray,
+                 lat2: np.ndarray, **kwargs) -> None:
+
+        self.lon1, self.lat1, self.lon2, self.lat2 = map(
+            np.array, [lon1, lat1, lon2, lat2])
+
+    def cal_distance(self, method='empirical', **kwargs) -> np.ndarray:
 
         methods = {
             'empirical': self.empirical_distance,
             'haversine': self.haversine_distance
         }
-
-        if distance_cal not in methods.keys():
+        if method not in methods.keys():
             raise ValueError('Invalid distance calculation method -> "%s" <-' %
-                             (distance_cal))
+                             (method))
 
-        Distance = methods.get(distance_cal)(x1_lon, x1_lat, x2_lon, x2_lat,
-                                             **kwargs)
+        Distance = methods.get(method)(self.lon1, self.lat1, self.lon2,
+                                       self.lat2, **kwargs)
 
         self.Distance = Distance
-        self.distance_threshold = distance_threshold
-
-    ### empirical distance calculation ###
-    def empirical_distance(self, x1_lon: np.ndarray, x1_lat: np.ndarray,
-                           x2_lon: np.ndarray, x2_lat: np.ndarray,
-                           **kwargs) -> np.ndarray:
-
-        if kwargs.get('meshgrid1', False):
-            x1_lon, x1_lat = np.meshgrid(x1_lon, x1_lat)
-            x1_lon = x1_lon.ravel()
-            x1_lat = x1_lat.ravel()
-
-        if kwargs.get('meshgrid2', False):
-            x2_lon, x2_lat = np.meshgrid(x2_lon, x2_lat)
-            x2_lon = x2_lon.ravel()
-            x2_lat = x2_lat.ravel()
-
-        lon_delta = np.subtract.outer(x1_lon, x2_lon)  # dims : dim1 * dim2
-        lat_delta = np.subtract.outer(x1_lat, x2_lat)  # dims : dim1 * dim2
-
-        Distance = np.sqrt((lon_delta * 100)**2 + (lat_delta * 100)**2)
-        return Distance
-
-    ### Haversine distance calculation from "https://blog.csdn.net/XB_please/article/details/108213196"
-    def haversine_distance(self, x1_lon: np.ndarray, x1_lat: np.ndarray,
-                           x2_lon: np.ndarray, x2_lat: np.ndarray,
-                           **kwargs) -> np.ndarray:
-
-        if kwargs.get('meshgrid1', False):
-            x1_lon, x1_lat = np.meshgrid(x1_lon, x1_lat)
-            x1_lon = x1_lon.ravel()
-            x1_lat = x1_lat.ravel()
-
-        if kwargs.get('meshgrid2', False):
-            x2_lon, x2_lat = np.meshgrid(x2_lon, x2_lat)
-            x2_lon = x2_lon.ravel()
-            x2_lat = x2_lat.ravel()
-
-        x1_lon = np.radians(x1_lon.reshape([len(x1_lon), 1]))
-        x1_lat = np.radians(x1_lat.reshape([len(x1_lat), 1]))
-        x2_lon = np.radians(x2_lon)
-        x2_lat = np.radians(x2_lat)
-
-        lon_delta = x2_lon - x1_lon
-        lat_delta = x2_lat - x1_lat
-
-        a = np.sin(
-            lat_delta /
-            2)**2 + np.cos(x1_lat) * np.cos(x2_lat) * np.sin(lon_delta / 2)**2
-        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-        Distance = 6371 * c
 
         return Distance
 
-    ### calculate the Localization matrix ###
-    def calculate(self, option='default') -> np.ndarray:
+    ### *--- calculate the Localization matrix ---* ###
+    def cal_correlation(self, option='default', **kwargs) -> np.ndarray:
 
         options = {
             'default': self.default,
-            '1': self.option1,
-            '2': self.option2
+            'linear': self.linear,
+            'option': self.option
         }
-        return options.get(option)()
+        Correlation = options.get(option)(**kwargs)
 
-    def default(self, ) -> np.ndarray:
+        return Correlation
 
-        Local_martrix = self.Distance / self.distance_threshold
+    def prepare_meshgrid(self, lon: np.ndarray, lat: np.ndarray,
+                         meshgrid_needed: bool) -> np.ndarray:
+        if meshgrid_needed:
+            lon, lat = np.meshgrid(lon, lat)
+            lon, lat = lon.ravel(), lat.ravel()
+        return lon, lat
+
+    ### *--------------------------------------* ###
+    ### *---      Distance Calculation      ---* ###
+
+    ### empirical distance calculation ###
+    # @profile
+    def empirical_distance(self, lon1: np.ndarray, lat1: np.ndarray,
+                           lon2: np.ndarray, lat2: np.ndarray,
+                           **kwargs) -> np.ndarray:
+
+        lon1, lat1 = self.prepare_meshgrid(lon1, lat1,
+                                           kwargs.get('meshgrid1', False))
+        lon2, lat2 = self.prepare_meshgrid(lon2, lat2,
+                                           kwargs.get('meshgrid2', False))
+
+        lon_delta = np.subtract.outer(lon1, lon2)  # dims : dim1 * dim2
+        lat_delta = np.subtract.outer(lat1, lat2)  # dims : dim1 * dim2
+
+        Distance = np.sqrt((lon_delta * 100)**2 + (lat_delta * 100)**2)
+
+        return Distance
+
+    ### Haversine distance calculation from "https://blog.csdn.net/XB_please/article/details/108213196"
+    # @profile
+    def haversine_distance(self, lon1: np.ndarray, lat1: np.ndarray,
+                           lon2: np.ndarray, lat2: np.ndarray,
+                           **kwargs) -> np.ndarray:
+
+        lon1, lat1 = self.prepare_meshgrid(lon1, lat1,
+                                           kwargs.get('meshgrid1', False))
+        lon2, lat2 = self.prepare_meshgrid(lon2, lat2,
+                                           kwargs.get('meshgrid2', False))
+
+        lon1, lat1, lon2, lat2 = map(np.radians, [
+            lon1.reshape([len(lon1), 1]),
+            lat1.reshape([len(lat1), 1]), lon2, lat2
+        ])
+
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+
+        a = np.sin(
+            dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+
+        # mean radius of earth (km)
+        Distance = 6371.0 * 2 * np.arcsin(np.sqrt(a))
+
+        return Distance
+
+    ### *------------------------------------* ###
+    ### *---   Correlation Calculatioon   ---* ###
+    # @profile
+    def default(self, **kwargs) -> np.ndarray:
+
+        distance_threshold = kwargs.get('distance_threshold', 500)
+        Local_martrix = self.Distance / distance_threshold
+
         condition1 = Local_martrix < 1
         condition2 = np.logical_and(1 <= Local_martrix, Local_martrix < 2)
         condition3 = Local_martrix >= 2
@@ -116,10 +126,10 @@ class Local_class:
 
         return Local_martrix
 
-    def option1(self) -> np.ndarray:
+    def linear(self) -> np.ndarray:
         pass
 
-    def option2(self) -> np.ndarray:
+    def option(self) -> np.ndarray:
         pass
 
 
@@ -144,45 +154,27 @@ def select_elements(array: np.ndarray, value: float, range: int) -> np.ndarray:
 
 if __name__ == '__main__':
 
-    from datetime import datetime
+    from time import time
 
-    timer0 = datetime.now()
+    start = time()
+    L1 = Localization(np.linspace(70, 140, 280), np.linspace(15, 50, 140),
+                      np.linspace(70, 140, 40), np.linspace(70, 140, 40))
+    L1.cal_distance(meshgrid1=True, meshgrid2=True)
+    L1.cal_correlation(distance_threshold=500)
+    print(f'shape : {L1.Distance.shape}')
+    print('took %.2f s' % (time() - start))
 
-    model_lon = np.linspace(10, 20, 10)
-    model_lat = np.linspace(10, 20, 10)
-    local = Local_class(np.linspace(70, 140, 280),
-                        np.linspace(15, 50, 140),
-                        np.linspace(70, 140, 40),
-                        np.linspace(70, 140, 40),
-                        distance_threshold=500,
-                        meshgrid1=True,
-                        meshgrid2=True)
-    Distance1 = local.Distance
-    L1 = local.calculate()
+    start = time()
+    L2 = Localization(np.linspace(70, 140, 280), np.linspace(15, 50, 140),
+                      np.linspace(70, 140, 40), np.linspace(70, 140, 40))
+    L2.cal_distance('haversine', meshgrid1=True, meshgrid2=True)
+    L2.cal_correlation(distance_threshold=500)
+    print(f'shape : {L2.Distance.shape}')
+    print('took %.2f s' % (time() - start))
 
-    timer1 = datetime.now()
-    # print(f'shape : {L1.shape}')
-    print(f'shape : {Distance1.shape}')
-    print('took %s s' % ((timer1 - timer0).total_seconds()))
-
-    # L2 = localization(model_lon, model_lat, 500)
-    # timer2 = datetime.now()
-
-    # print(f'shape : {L2.shape}')
-    # print('took %s s' % ((timer2 - timer1).total_seconds()))
-
-    timer3 = datetime.now()
-    local = Local_class(np.linspace(70, 140, 280),
-                        np.linspace(15, 50, 140),
-                        np.linspace(70, 140, 40),
-                        np.linspace(70, 140, 40),
-                        distance_threshold=500,
-                        distance_cal='haversine',
-                        meshgrid1=True,
-                        meshgrid2=True)
-    Distance2 = local.Distance
-    L3 = local.calculate()
-
-    timer4 = datetime.now()
-    print(f'shape : {Distance2.shape}')
-    print('took %s s' % ((timer4 - timer3).total_seconds()))
+    L = Localization([110, 100], [35, 30], [110, 100], [30, 30])
+    d1 = L.cal_distance('empirical')
+    print(L.cal_correlation())
+    d2 = L.cal_distance('haversine')
+    print(L.cal_correlation())
+    print(d1, d2)

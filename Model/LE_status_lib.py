@@ -1,24 +1,30 @@
 '''
 Autor: Mijie Pang
 Date: 2023-11-30 16:23:13
-LastEditTime: 2023-12-05 10:26:48
+LastEditTime: 2024-03-04 22:14:35
 Description: 
 '''
 import os
+import subprocess
 import pandas as pd
 from datetime import datetime
 
 
-def check_model_state(lines: str, depth=10) -> list:
+def check_model_log(log_path: str, depth=10) -> list:
 
     Finished_flag = False
     Error_flag = False
     finish_mark = ('[INFO    ] End of script at', '[INFO    ] ** end **',
                    '*** end of simulation reached')
-    error_mark = ('[ERROR   ] exception', 'subprocess.CalledProcessError:')
+    error_mark = ('[ERROR   ] exception', 'subprocess.CalledProcessError:',
+                  'ERROR:root:exception')
 
-    for line in lines[int(-1 * depth):]:
+    result = subprocess.run(['tail', '-n', str(depth), log_path],
+                            capture_output=True,
+                            text=True)
+    output = result.stdout.split('\n')
 
+    for line in output:
         if line.startswith(finish_mark):
             Finished_flag = True
         elif line.startswith(error_mark):
@@ -27,7 +33,7 @@ def check_model_state(lines: str, depth=10) -> list:
     return Finished_flag, Error_flag
 
 
-class Status_Reporter:
+class StatusReporter:
 
     def __init__(self, start_time: str, end_time: str, interval: str,
                  run_dir: str, run_id: str) -> None:
@@ -98,11 +104,7 @@ class Status_Reporter:
     def check_status(self, ) -> bool:
 
         log_file_path = '%s/log/%s.out.log' % (self.run_dir, self.run_id)
-
-        with open(log_file_path, 'r') as f:
-            lines = f.readlines()
-
-        Finished_flag, Error_flag = check_model_state(lines)
+        Finished_flag, Error_flag = check_model_log(log_file_path)
 
         return Finished_flag, Error_flag
 
@@ -111,7 +113,7 @@ if __name__ == '__main__':
 
     import time
 
-    SR = Status_Reporter(
+    SR = StatusReporter(
         '2023-03-01 00:00', '2023-05-31 23:00', '1H',
         '/home/pangmj/TNO/scratch/projects/Reanalysis/beta072_2023_background',
         'beta072_2023_background')

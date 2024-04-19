@@ -1,5 +1,5 @@
 {
-    "generate_run_time": {
+    "run_time": {
         "scheme": "equal_step",
         "equal_step": {
             "first_run_time": "2021-03-01 03:00:00",

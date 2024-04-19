@@ -1,94 +1,91 @@
 '''
 Autor: Mijie Pang
 Date: 2023-09-14 21:07:10
-LastEditTime: 2024-01-10 15:56:55
-Description: 
+LastEditTime: 2024-04-07 10:27:22
+Description: designed to store outputs in nc file
 '''
-import os
-import gc
-import pickle
 import numpy as np
 import netCDF4 as nc
+from pytz import utc
 from datetime import datetime
 
 
-### a class designed for creating nc files ###
+### *--- Designed for nc file creation ---* ###
 class NcProduct:
 
     def __init__(self,
                  file_path='test.nc',
                  mode='w',
                  format='NETCDF4',
-                 **kwarg):
+                 **kwargs):
 
-        if not file_path.endswith('.nc'):
-            file_path = file_path + '.nc'
+        self.file_path = self.ensure_nc_extension(file_path)
+        self.nc_file = nc.Dataset(self.file_path, mode, format=format)
+        self.init_file(mode, **kwargs)
 
-        nc_file = nc.Dataset(file_path, mode, format=format)
+    @staticmethod
+    def ensure_nc_extension(file_path: str) -> str:
 
-        ### create a new netcdf file ###
+        return file_path if file_path.endswith('.nc') else f'{file_path}.nc'
+
+    ### *--- initiate the nc file ---* ###
+    def init_file(self, mode: str, **kwargs) -> None:
+
         if mode == 'w':
+            self.set_creation_time()
+            self.set_global_attributes(**kwargs)
 
-            nc_file.Create_time = 'Created at %s UTC' % (
-                datetime.now().utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+    def set_creation_time(self) -> None:
 
-            ### define some global attributions ###
-            if 'Model' in kwarg.keys() and 'Assimilation' in kwarg.keys():
+        self.nc_file.setncattr(
+            'Create_time',
+            datetime.now().astimezone(utc).strftime('%Y-%m-%d %H:%M:%S UTC'))
 
-                model_scheme = kwarg['Model']['scheme']['name']
-                assimilation_scheme = kwarg['Assimilation']['scheme']['name']
-                nc_file.Project = '%s -> %s' % (
-                    kwarg['Model'][model_scheme]['run_project'],
-                    kwarg['Assimilation'][assimilation_scheme]['project_name'])
+    ### *--- define some global attributions ---* ###
+    def set_global_attributes(self, **kwargs) -> None:
 
-            if 'Info' in kwarg.keys():
+        if 'Model' in kwargs.keys() and 'Assimilation' in kwargs.keys():
 
-                nc_file.Producer = kwarg['Info']['System']['name']
-                nc_file.version = str(kwarg['Info']['System']['version'])
-                nc_file.Author = kwarg['Info']['User']['Author']
-                nc_file.Institute = kwarg['Info']['User']['Institute']
-                nc_file.Host = kwarg['Info']['Machine']['Host']
+            model_scheme = kwargs['Model']['scheme']['name']
+            assimilation_scheme = kwargs['Assimilation']['scheme']['name']
+            self.nc_file.Project = '%s -> %s' % (
+                kwargs['Model'][model_scheme]['run_project'],
+                kwargs['Assimilation'][assimilation_scheme]['project_name'])
 
-        ### append to an existing netcdf file ###
-        if mode == 'a':
+        if 'Info' in kwargs.keys():
 
-            variable_dict = {}
-            for i_var in nc_file.variables:
-                variable_dict[i_var] = nc_file.variables[i_var]
+            self.nc_file.System = kwargs['Info']['System']['name']
+            self.nc_file.version = str(kwargs['Info']['System']['version'])
+            self.nc_file.User = kwargs['Info']['User']['Name']
+            self.nc_file.Institute = kwargs['Info']['User']['Institute']
+            self.nc_file.Host = kwargs['Info']['Machine']['Host']
 
-            self.variable_dict = variable_dict
+    ### *--- define the dimension of the nc file ---* ###
+    def define_dimension(self, **dims) -> None:
 
-        self.nc_file = nc_file
+        for name, size in dims.items():
+            self.nc_file.createDimension(name, size=size)
 
-    ### define the dimension in the nc file ###
-    def define_dimension(self, **dims):
+    ### *--- define the variables and their dimension in the nc file ---* ###
+    def define_variable(self, **kwargs) -> None:
 
-        self.dimension_dict = {}
-        for i_key in dims.keys():
-            self.dimension_dict[i_key] = self.nc_file.createDimension(
-                i_key, size=dims[i_key])
-
-    ### define the variables and their dimension in the nc file and
-    def define_variable(self, **kwarg):
-
-        self.variable_dict = {}
-        for i_key in kwarg.keys():
-            self.variable_dict[i_key] = self.nc_file.createVariable(
-                i_key, kwarg[i_key][0], dimensions=kwarg[i_key][1])
+        for var_name, (var_type, dimensions) in kwargs.items():
+            self.nc_file.createVariable(var_name, var_type, dimensions)
 
     def define_variable_dict(self, var_dict):
 
         for i_key in var_dict.keys():
-            self.variable_dict[i_key] = self.nc_file.createVariable(
-                i_key, var_dict[i_key][0], dimensions=var_dict[i_key][1])
+            self.nc_file.createVariable(i_key,
+                                        var_dict[i_key][0],
+                                        dimensions=var_dict[i_key][1])
 
-    ### set global attribute ###
+    ### *--- set global attribute ---* ###
     def set_attr_global(self, **kwargs) -> None:
 
         for key in kwargs.keys():
             self.nc_file.setncattr(key, kwargs[key])
 
-    ### set attribute to variables ###
+    ### *--- set attribute of variables ---* ###
     def set_attr(self, **kwargs) -> None:
 
         for var in kwargs.keys():
@@ -96,99 +93,41 @@ class NcProduct:
                 self.nc_file.variables[var].setncattr(attr_name,
                                                       kwargs[var][attr_name])
 
-    ### add the data to the variables ###
-    def add_data(self, count=1e9, **kwarg) -> None:
+    ### *--- add the data ---* ###
+    def add_data(self, count=1e9, **kwargs) -> None:
 
-        for key in kwarg.keys():
-
-            ### determine if the variables contain a unlimited dimendion ###
-            ### Attention： the first dimension must be time if there is unlimited dim ###
-            unlimit_flag = False
-            time_dim = str(self.variable_dict[key].dimensions[0])
-            if self.nc_file.dimensions[time_dim].isunlimited():
-                unlimit_flag = True
-
-            ### add the data ###
-            if unlimit_flag:
-                time_dim_size = self.nc_file.dimensions[time_dim].size
-                if count < 1e9:
-                    self.variable_dict[key][count] = kwarg[key]
-                    # print(count)
-                else:
-                    self.variable_dict[key][time_dim_size] = kwarg[key]
-                    # print(time_dim_size)
-                self.variable_dict[key][time_dim_size] = kwarg[key]
-            else:
-                self.variable_dict[key][:] = kwarg[key]
-
-    def add_data_dict(self, data_dict: dict, count=1e9) -> None:
-
-        for key in data_dict.keys():
+        for key in kwargs.keys():
 
             ### determine if the variables contain a unlimited dimendion ###
             ### Attention： the first dimension must be time if there is unlimited dim ###
             unlimit_flag = False
-            time_dim = str(self.variable_dict[key].dimensions[0])
+            time_dim = str(self.nc_file[key].dimensions[0])
             if self.nc_file.dimensions[time_dim].isunlimited():
                 unlimit_flag = True
 
-            ### add the data ###
+            ### *--- time dimension ---* ###
             if unlimit_flag:
+
                 time_dim_size = self.nc_file.dimensions[time_dim].size
-                if count < 1e9:
-                    self.variable_dict[key][count] = data_dict[key]
-                    # print(count)
+                # assign the dim to add the data
+                if not count == 1e9:
+                    self.nc_file[key][count] = kwargs[key]
+                # append the data after the last time dim
                 else:
-                    self.variable_dict[key][time_dim_size] = data_dict[key]
-                    # print(time_dim_size)
+                    self.nc_file[key][time_dim_size] = kwargs[key]
+
+            ### *--- not time dimension ---* ###
             else:
-                self.variable_dict[key][:] = data_dict[key]
 
-    ### return the nc file ###
-    def return_obj(self):
-        return self.nc_file
+                self.nc_file[key][:] = kwargs[key]
 
-    ## close the nc file ###
-    def close(self):
+    ### *--- close the nc file ---* ###
+    def close(self) -> None:
 
-        self.nc_file.history = 'Last modified at %s UTC' % (
-            datetime.now().utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+        self.nc_file.setncattr(
+            'history', 'Last modified at %s' %
+            datetime.now().astimezone(utc).strftime('%Y-%m-%d %H:%M:%S UTC'))
         self.nc_file.close()
-        self.variable_dict = {}
-        gc.collect()
-
-
-### decorator : save function output to pickle format ###
-def cache(path='.', name='test', format='pkl'):
-
-    def decorator(func):
-
-        def wrapper(*args, **kwargs):
-
-            result = func(*args, **kwargs)
-
-            if format == 'pkl':
-                with open(
-                        os.path.join(
-                            path, name +
-                            datetime.now().strftime('T%Y%m%d%H%M%S.pkl')),
-                        "wb") as file:
-                    pickle.dump(result, file)
-
-            elif format == 'npy':
-                np.save(
-                    os.path.join(
-                        path, name + datetime.now().strftime('T%Y%m%d%H%M%S')),
-                    result)
-
-            elif format == None:
-                pass
-
-            return result
-
-        return wrapper
-
-    return decorator
 
 
 if __name__ == '__main__':
@@ -207,15 +146,13 @@ if __name__ == '__main__':
                             'unit': 'test',
                             'angle': 'None'
                         })
+    print(dir(nc_produce))
     nc_produce.close()
 
     nc_produce = NcProduct('test.nc', mode='a')
     nc_produce.add_data(data=np.random.random([180, 20]))
     nc_produce.close()
 
-    # @cache(path='.', name='test', format='npy')
-    # @timer(count=True)
-    def calculate_square(number):
-        return number**2
-
-    calculate_square(4)
+    nc_produce = NcProduct('test.nc', mode='a')
+    nc_produce.add_data(data=np.random.random([180, 20]))
+    nc_produce.close()

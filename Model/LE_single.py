@@ -1,97 +1,139 @@
 '''
 Autor: Mijie Pang
 Date: 2022-12-04 09:20:01
-LastEditTime: 2023-09-22 19:18:56
+LastEditTime: 2024-04-05 15:35:07
 Description: 
 '''
 import os
 import sys
+import time
+import logging
+
+main_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(main_dir)
+sys.path.append(os.path.join(main_dir, 'Model'))
+
+import system_lib as stl
+from tool.node import NodeScript, CheckNode
 
 import Model_lib as mol
 import LE_model_lib as leml
+import LE_status_lib as lesl
 
-sys.path.append('../')
-import system_lib as stl
 
-home_dir = os.getcwd()
-pid = os.getpid()
+def main(Config: dict, **kwargs):
 
-config_dir = '../config'
-status_path = '../Status.json'
+    home_dir = os.getcwd()
+    pid = os.getpid()
+    Status = stl.edit_json(
+        path=os.path.join(main_dir, 'Status.json'),
+        new_dict={'model': {
+            'home_dir': home_dir,
+            'code': 10,
+            'pid': pid
+        }})
 
-stl.edit_json(
-    path=status_path,
-    new_dict={'model': {
-        'home_dir': home_dir,
-        'code': 10,
-        'pid': pid
-    }})
+    check_node = CheckNode(Config['Info']['Machine']['management'])
 
-### read configuration ###
-Config = stl.read_json_dict(config_dir, 'Assimilation.json', 'Model.json',
-                            'Info.json')
-Status = stl.read_json(path=status_path)
+    ### *--- initialize parameters ---* ###
+    model_scheme = Config['Model']['scheme']['name']
+    assi_scheme = Config['Assimilation']['scheme']['name']
 
-### prepare log class ###
-system_log = stl.Logging(os.path.join(
-    Status['system']['home_dir'], Status['system']['system_project'] + '.log'),
-                         level=Config['Info']['System']['log_level'])
+    iteration_num = Config['Model'][model_scheme]['iteration_num']
+    run_id = Config['Assimilation'][assi_scheme]['project_name']
+    le_dir = Config['Model'][model_scheme]['path']['model_path']
+    le_dir_sub = Config['Model'][model_scheme]['path']['model_path'] + '_sub'
 
-### initialize parameters ###
-model_scheme = Config['Model']['scheme']['name']
-assi_scheme = Config['Assimilation']['scheme']['name']
+    mol.copy_from_source(model_dir=le_dir,
+                         model_dir_sub=le_dir_sub,
+                         run_id=run_id)
 
-iteration_num = int(Config['Model'][model_scheme]['iteration_num'])
-run_id = Config['Assimilation'][assi_scheme]['project_name']
-system_project = Status['system']['system_project']
-le_dir = Config['Model'][model_scheme]['path']['model_path']
-le_dir_sub = Config['Model'][model_scheme]['path']['model_path'] + '_sub'
+    ### *--- edit the model configuration ---* ###
+    leml.LOTOS_EUROS_Configure_dict(
+        # project_dir=sub_dirs[i_ensemble] + '/proj/dust/002',
+        project_dir=le_dir_sub + '/proj/radiation/001',
+        config_dict={
+            'run.id': run_id,
+            'run.project': Config['Model'][model_scheme]['run_project'],
+            'timerange.start': Status['model']['start_time'],
+            'timerange.end': Status['model']['end_time'],
+        },
+        **Config['Model'][model_scheme]['rc'])
 
-mol.copy_from_source(model_dir=le_dir, model_dir_sub=le_dir_sub, run_id=run_id)
+    ### *--- edit the dust emission file ---* ###
+    leml.LOTOS_EUROS_dust_emis(
+        # project_dir=sub_dirs[run_count] + '/proj/dust/002',
+        project_dir=le_dir_sub + '/proj/radiation/001',
+        iteration_num=iteration_num,
+        i_ensemble=0,
+        # year=start_time[:4],
+    )
 
-### select node ###
-core_demand = int(Config['Model']['node']['core_demand'])
-node_id = stl.get_available_node(demand=core_demand)
+    ### *--- add the meteo configuration ---* ###
+    if Config['Model'][model_scheme]['meteo']['type'] == 'ensem':
+        leml.LOTOS_EUROS_meteo_config(base_dir=le_dir_sub + '/base/001',
+                                      meteo_num=1)
 
-## configure model ###
-leml.LOTOS_EUROS_Configure_dict(
-    project_dir=le_dir_sub + '/' + run_id + '/proj/dust/002',
-    i_ensemble=0,
-    config_dict={
-        'run.id': run_id,
-        'run.project': Config['Model'][model_scheme]['run_project'],
-        'timerange.start': Status['model']['start_time'],
-        'timerange.end': Status['model']['end_time'],
-        'par.nthread': str(core_demand)
-    },
-    iteration_num=iteration_num,
-    **Config['Model'][model_scheme]['rc'])
+    ### *--- select node ---* ###
+    core_demand = Config['Model']['node']['core_demand']
+    node_id = int(Config['Model']['node']['node_id'])
+    if Config['Model']['node']['auto_node_selection']:
+        node_id = check_node.query(demand=core_demand,
+                                   random_choice=True,
+                                   **Config['Model']['node'])
 
-mol.launcher_sever_Configure(
-    le_dir=le_dir_sub + '/' + run_id,
-    run_id=run_id,
-    node_id=node_id,
-    core_demand=core_demand,
-    job_name=run_id,
-    text=[
+    ### *--- prepare submit script ---* ###
+    submission = NodeScript(path='%s/launcher-server' % (le_dir_sub),
+                            node_id=node_id,
+                            core_demand=core_demand,
+                            job_name=run_id,
+                            out_file='log/%s.out.log' % (run_id),
+                            error_file='log/%s.err.log' % (run_id),
+                            management=Config['Info']['Machine']['management'])
+    submission.add(
         'export zijin_dir="/home/pangmj"',
-        '. ${zijin_dir}/TNO/env_bash/bashrc_lotos-euros',
+        '. ' + Config['Model'][model_scheme]['path']['model_bashrc_path'],
         'export LD_LIBRARY_PATH="/home/jinjb/TNO/lotos-euros/v2.1_dust2021_ensemble/tools:$LD_LIBRARY_PATH"',
-        './launcher-radiation -s'
-    ])
+        './launcher-radiation -n')
+    submit_command = submission.get_command()
 
-### run the model ###
-os.chdir(le_dir_sub + '/' + run_id)
-command = os.system('. ' +
-                    Config['Model'][model_scheme]['path']['model_bashrc_path'])
-command = os.system('qsub launcher-server')
+    ### *--- run the model ---* ###
+    os.chdir(le_dir_sub)
+    command = os.system(
+        '. ' + Config['Model'][model_scheme]['path']['model_bashrc_path'])
+    command = os.system(submit_command)
 
-leml.wait_for_model(le_dir_sub=le_dir_sub,
-                    mv_model_log_dir=Config['Info']['path']['output_path'] +
-                    '/log',
-                    run_id=Config['Assimilation'][assi_scheme]['project_name'],
-                    system_log=system_log)
+    logging.info('%s submitted to node %s' % (run_id, node_id))
 
-### update the finished status ###
-os.chdir(home_dir)
-stl.edit_json(path=status_path, new_dict={'model': {'code': 100}})
+    log_file_path = '%s/log/%s.out.log' % (le_dir_sub, run_id)
+    Finished_flag, Error_flag = False, False
+    while not Finished_flag or not Error_flag:
+
+        Finished_flag, Error_flag = lesl.check_model_log(
+            log_path=log_file_path)
+
+        ### *--- ERROR process ---* ###
+        # if error happened, reset the ensemble to ready mode
+        if Error_flag:
+            logging.warning('%s error happened' % (run_id))
+
+        ### *--- SUCCESS process ---* ###
+        # if it is finished secessfully, release the occupied core
+        elif Finished_flag:
+            logging.info('%s finished successfully' % (run_id))
+
+        time.sleep(5)
+
+    ### *--- update the finished status ---* ###
+    os.chdir(home_dir)
+    stl.edit_json(path=os.path.join(main_dir, 'Status.json'),
+                  new_dict={'model': {
+                      'code': 100
+                  }})
+
+
+if __name__ == '__main__':
+
+    stl.Logging()
+    Config = stl.read_json_dict(os.path.join(main_dir, 'config'), get_all=True)
+    main(Config)

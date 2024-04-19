@@ -1,7 +1,7 @@
 '''
 Autor: Mijie Pang
 Date: 2023-09-16 16:46:40
-LastEditTime: 2024-01-10 15:55:26
+LastEditTime: 2024-03-23 09:28:46
 Description: designed for jobs running on node
 '''
 import os
@@ -9,8 +9,11 @@ import time
 import random
 import logging
 
+from decorators import deprecated
+
 
 ### prepare the script to submit the job to the node ###
+@deprecated
 class NodeScript:
 
     def __init__(self,
@@ -143,32 +146,57 @@ class NodeScript:
 ### prepare the script to submit the job to the node ###
 class NodeScript_test:
 
-    def __init__(self, path='default.sh', management='SGE', **kwargs) -> None:
-
-        managements = {
-            'SGE': self.SGE_script,
-            'PBS': self.PBS_script,
-            'SLURM': self.SLURM_script
-        }
-        try:
-            managements.get(management)(**kwargs)
-        except:
-            raise ValueError('Management : "%s" is not supported yet' %
-                             (management))
+    def __init__(self,
+                 path='default.sh',
+                 node_id=1,
+                 core_demand=1,
+                 job_name='test',
+                 out_file='',
+                 error_file='',
+                 parallel_mode='smp',
+                 executor='/bin/bash',
+                 management='SGE',
+                 **kwargs) -> None:
 
         self.path = path
+        self.node_id = node_id
+        self.core_demand = core_demand
+        self.executor = executor
+        self.job_name = job_name
+        self.parallel_mode = parallel_mode
         self.management = management
+        self.out_file = out_file if out_file else f'{job_name}_out.log'
+        self.error_file = error_file if error_file else f'{job_name}_error.log'
 
-    ### Strategy for Sun Grid Engine (SGE) ###
-    def SGE_script(self, **kwargs) -> None:
+        self.script_list = self._generate_script(**kwargs)
 
-        executor = kwargs.get('executor', '/bin/bash')
-        node_id = kwargs.get('node_id', 1)
-        job_name = kwargs.get('job_name', 'test')
-        parallel_mode = kwargs.get('parallel_mode', 'smp')
-        core_demand = kwargs.get('core_demand', 1)
-        out_file = kwargs.get('out_file', '')
-        error_file = kwargs.get('error_file', '')
+    ### *-----------------------------------------------* ###
+    ### *---   Generate the node submission script   ---* ###
+    ### *-----------------------------------------------* ###
+    def _generate_script(self, **kwargs):
+
+        manager_strategy = {
+            'SGE': self._generate_sge,
+            'SLURM': self._generate_slurm,
+            'PBS': self._generate_pbs
+        }
+
+        if self.management in manager_strategy:
+            return manager_strategy[self.management](**kwargs)
+        else:
+            raise ValueError(
+                f'Management : {self.management} is not supported yet')
+
+    ### *--- Strategy for Sun Grid Engine (SGE) ---* ###
+    def _generate_sge(self, **kwargs) -> list:
+
+        executor = kwargs.get('executor', self.executor)
+        node_id = kwargs.get('node_id', self.node_id)
+        job_name = kwargs.get('job_name', self.job_name)
+        parallel_mode = kwargs.get('parallel_mode', self.parallel_mode)
+        core_demand = kwargs.get('core_demand', self.core_demand)
+        out_file = kwargs.get('out_file', self.out_file)
+        error_file = kwargs.get('error_file', self.error_file)
 
         script_list = []
 
@@ -186,31 +214,27 @@ class NodeScript_test:
             script_list.append('#$ -q %s' % (node_id))
 
         # assign the standard output file
-        if out_file == '':
-            out_file = job_name + '_out.log'
         script_list.append('#$ -o %s' % (out_file))
 
         # assign the standard error file
-        if error_file == '':
-            error_file = job_name + '_error.log'
         script_list.append('#$ -e %s' % (error_file))
 
         script_list.append('#$ -N %s' % (job_name))  #  job name
         # assign the parallel computing mode and number
         script_list.append('#$ -pe %s %s' % (parallel_mode, core_demand))
 
-        self.script_list = script_list
+        return script_list
 
-    ### Strategy for Simple Linux Utility for Resource Management (SLURM) ###
-    def SLURM_script(self, **kwargs) -> None:
+    ### *--- Strategy for Simple Linux Utility for Resource Management (SLURM) ---* ###
+    def _generate_slurm(self, **kwargs) -> list:
 
-        executor = kwargs.get('executor', '/bin/bash')
-        node_id = kwargs.get('node_id', 1)
-        job_name = kwargs.get('job_name', 'test')
-        parallel_mode = kwargs.get('parallel_mode', 'smp')
-        core_demand = kwargs.get('core_demand', 1)
-        out_file = kwargs.get('out_file', '')
-        error_file = kwargs.get('error_file', '')
+        executor = kwargs.get('executor', self.executor)
+        node_id = kwargs.get('node_id', self.node_id)
+        job_name = kwargs.get('job_name', self.job_name)
+        parallel_mode = kwargs.get('parallel_mode', self.parallel_mode)
+        core_demand = kwargs.get('core_demand', self.core_demand)
+        out_file = kwargs.get('out_file', self.out_file)
+        error_file = kwargs.get('error_file', self.error_file)
 
         script_list = []
 
@@ -224,18 +248,18 @@ class NodeScript_test:
         script_list.append('#SBATCH -o ')
         script_list.append('#SBATCH -e ')
 
-        self.script_list = script_list
+        return script_list
 
-    ### Strategy for Portable Batch System (PBS) ###
-    def PBS_script(self, **kwargs) -> None:
+    ### *--- Strategy for Portable Batch System (PBS) ---* ###
+    def _generate_pbs(self, **kwargs) -> list:
 
-        executor = kwargs.get('executor', '/bin/bash')
-        node_id = kwargs.get('node_id', 1)
-        job_name = kwargs.get('job_name', 'test')
-        # parallel_mode = kwargs.get('parallel_mode', 'smp')
-        core_demand = kwargs.get('core_demand', 1)
-        out_file = kwargs.get('out_file', '')
-        error_file = kwargs.get('error_file', '')
+        executor = kwargs.get('executor', self.executor)
+        node_id = kwargs.get('node_id', self.node_id)
+        job_name = kwargs.get('job_name', self.job_name)
+        parallel_mode = kwargs.get('parallel_mode', self.parallel_mode)
+        core_demand = kwargs.get('core_demand', self.core_demand)
+        out_file = kwargs.get('out_file', self.out_file)
+        error_file = kwargs.get('error_file', self.error_file)
 
         script_list = []
 
@@ -257,48 +281,42 @@ class NodeScript_test:
             error_file = job_name + '_error.log'
         script_list.append('#PBS -e %s' % (error_file))
 
-        self.script_list = script_list
+        return script_list
 
-    ### add extra config scripts if necessary ###
+    ### *--- add extra config scripts if necessary ---* ###
     def add_config(self, **kwargs) -> None:
 
-        if self.management == 'SGE':
-            prefix = '#$'
-        elif self.management == 'SLURM':
-            prefix = '#SBATCH'
-        elif self.management == 'PBS':
-            prefix = '#PBS'
+        prefix_options = {'SGE': '#$', 'SLURM': '#SBATCH', 'PBS': '#PBS'}
+        prefix = prefix_options.get(self.management, '')
+        for key, value in kwargs.items():
+            self.script_list.append(f"{prefix} {key} {value}")
 
-        for key in kwargs.keys():
-            self.script_list.append('%s %s %s' % (prefix, key, kwargs[key]))
-
-    ### add run scripts ###
+    ### *--- add run scripts ---* ###
     def add(self, *args) -> None:
 
         self.script_list += args
 
-    ### write to the submission file ###
+    ### *--- write to the submission file ---* ###
     def write(self, ) -> None:
 
         with open(self.path, 'w') as file:
             file.write('\n'.join(self.script_list))
 
-    ### get the submission command ###
+    ### *--- get the submission command ---* ###
     def get_command(self) -> str:
 
-        with open(self.path, 'w') as file:
-            file.write('\n'.join(self.script_list))
+        # Ensure the script is written before returning the command
+        self.write()
 
-        ### return the submission command ###
-        script_name = self.path.split('/')[-1]
-        if self.management == 'SGE' or self.management == 'PBS':
-            submit_command = 'qsub ' + script_name
-        elif self.management == 'SLURM':
-            submit_command = 'sbatch ' + script_name
+        # return the submission command
+        script_name = os.path.basename(self.path)
+        command_options = {'SGE': 'qsub', 'SLURM': 'sbatch', 'PBS': 'qsub'}
+        submit_command = command_options.get(
+            self.management) + ' ' + script_name
         return submit_command
 
 
-### check the available cores in node ###
+### *--- check the available cores in node ---* ###
 class CheckNode:
 
     def __init__(self, management='SGE') -> None:
@@ -315,8 +333,8 @@ class CheckNode:
             self.management = management
             self.managements = managements
 
-    ##########################################################
-    ###               *--- Query Portal ---*               ###
+    ### *------------------------* ###
+    ### *---   Query Portal   ---* ###
     def query(self, **kwargs) -> None:
 
         return self.managements.get(self.management)(**kwargs)
@@ -473,17 +491,53 @@ class CheckNode:
         pass
 
 
+### arange all the ensemble to a node list ###
+def arange_node_list(available_num: list, ensemble_number: int,
+                     core_demand: int) -> list:
+
+    core_demand = int(core_demand)
+    ensemble_number = int(ensemble_number)
+
+    ### check if the available node is sufficient ###
+    available_flag = False
+    while not available_flag:
+
+        total_available = sum(
+            [available_num[i_node][1] for i_node in range(len(available_num))])
+        if ensemble_number * core_demand <= total_available:
+            available_flag = True
+        else:
+            logging.warning('node busy')
+            time.sleep(60)
+            available_num = CheckNode.query(demand=core_demand,
+                                            reserve=0,
+                                            return_type='number_list')
+
+    ### arrange a node list ###
+    node_list = []
+    for i in range(ensemble_number):
+        for j in range(len(available_num)):
+
+            if available_num[j][1] - core_demand >= 0:
+                # print(available_num)
+                node_list.append(int(available_num[j][0]))
+                available_num[j][1] = available_num[j][1] - core_demand
+                break
+
+    return node_list
+
+
 if __name__ == '__main__':
 
     # check = CheckNode(management='kgs')
     # print(check.query(return_type='str_list'))
 
-    # submit = NodeScript()
-    # submit.add_config(a=8932)
-    # submit.add('falskdjfd', 'fdoajfds', 'fodajifdsa', 'fsdaf', 'dfaoisdf',
-    #            'oivjcbx')
-    # submit.write()
-    # print(submit.get_command())
+    submit = NodeScript_test()
+    submit.add_config(a=8932)
+    submit.add('falskdjfd', 'fdoajfds', 'fodajifdsa', 'fsdaf', 'dfaoisdf',
+               'oivjcbx')
+    submit.write()
+    print(submit.get_command())
 
-    test = CheckNode('SGE')
-    print(test.query())
+    # test = CheckNode('SGE')
+    # print(test.query())

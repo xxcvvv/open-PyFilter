@@ -32,9 +32,8 @@ model_scheme = Config['Model']['scheme']['name']
 assimilation_scheme = Config['Assimilation']['scheme']['name']
 
 ### initialize the system log ###
-system_log = stl.Logging(os.path.join(
-    Status['system']['home_dir'], Status['system']['system_project'] + '.log'),
-                         level=Config['Info']['System']['log_level'])
+system_log = stl.Logging(Status['system']['home_dir'],
+                         **Config['Info']['System'])
 
 ### initial the parameters ###
 Ne = Config['Model'][model_scheme][

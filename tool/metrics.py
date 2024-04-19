@@ -1,7 +1,7 @@
 '''
 Autor: Mijie Pang
 Date: 2023-09-14 21:08:27
-LastEditTime: 2024-01-10 15:57:32
+LastEditTime: 2024-02-20 19:50:09
 Description: 
 '''
 import numpy as np
@@ -63,7 +63,7 @@ class MetricTwoD:
 
     ### Root Mean Square Error ###
     def RMSE(self, ) -> float:
-        return np.sqrt(np.mean(self.x1 - self.x2)**2)
+        return np.sqrt(np.mean((self.x1 - self.x2)**2))
 
     ### Mean Bias ###
     def MB(self, ) -> float:

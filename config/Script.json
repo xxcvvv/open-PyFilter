@@ -7,45 +7,35 @@
     },
     "lotos-euros": {
         "initial": {
-            "install_restart": "LE_initial_install.py",
-            "initial_run": "LE_initial_run.py"
+            "install_restart": "LE_initial_install",
+            "initial_run": "LE_initial_run"
         },
         "prepare": {},
         "Assimilation": {
-            "enkf_dust": "LE_EnKF_dust.py",
-            "enkf_aod": "LE_EnKF_aod.py",
-            "enkf_aod2dust": "LE_EnKF_aod2dust.py",
-            "enkf_legacy": "LE_EnKF_legacy.py",
-            "enkf_aod+dust": "LE_EnKF_aod+dust.py",
-            "enkf_aod+dust_reanalysis": "LE_EnKF_aod+dust_3d_reanalysis.py",
-            "enkf_aod-dust_reanalysis": "LE_EnKF_aod-dust_reanalysis.py",
-            "ntenkf_hybrid": "LE_NTEnKF_hybrid.py",
+            "enkf_dust": "LE_EnKF_dust",
+            "enkf_aod": "LE_EnKF_aod",
+            "enkf_aod2dust": "LE_EnKF_aod2dust",
+            "enkf_legacy": "LE_EnKF_legacy",
+            "enkf_aod+dust": "LE_EnKF_aod+dust",
+            "enkf_aod+dust_reanalysis": "LE_EnKF_aod+dust_3d_reanalysis",
+            "enkf_aod-dust_reanalysis": "LE_EnKF_aod-dust_reanalysis",
+            "enkf_vts_hybrid": "LE_EnKF_VTS_hybrid",
+            "enkf_vts_small": "LE_EnKF_VTS_small",
+            "enkf_vts_aod-dust_reanalysis": "LE_EnKF_VTS_aod-dust_reanlysis",
             "post_process": {
-                "plot": "LE_plot_assimilation.py"
+                "plot": "LE_plot_assimilation"
             }
         },
         "Model": {
-            "ensemble": "LE_ensemble.py",
-            "single": "LE_single.py",
-            "ensemble_extend": "LE_ensemble_extend.py",
+            "ensemble": "LE_ensemble",
+            "single": "LE_single",
+            "ensemble_extend": "LE_ensemble_extend",
             "post_process": {
                 "save": {
-                    "origin": "LE_save_origin.py",
-                    "merge": "LE_save_merge.py"
+                    "origin": "LE_save_origin",
+                    "merge": "LE_save_merge"
                 },
-                "plot": "LE_plot_forecast.py"
-            }
-        }
-    },
-    "pangu": {
-        "Model": {
-            "single": "Pangu_single.py",
-            "ensemble": "Pangu_ensemble_mpi.py",
-            "post_process": {
-                "save": {
-                    "merge": "Pangu_save_merge.py"
-                },
-                "plot": "Pangu_plot_forecast.py"
+                "plot": "LE_plot_forecast"
             }
         }
     }

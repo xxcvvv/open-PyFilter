@@ -1,7 +1,8 @@
 {
     "scheme": {
         "name": "enkf_fast",
-        "run": "node"
+        "run": "node",
+        "enable": true
     },
     "node": {
         "auto_node_selection": true,
@@ -20,7 +21,7 @@
     "enkf_fast": {
         "project_name": "test",
         "write_restart": true,
-        "use_localization":true,
+        "use_localization": true,
         "distance_threshold": 500
     },
     "ntenkf_hybrid": {

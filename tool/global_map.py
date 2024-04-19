@@ -1,125 +1,49 @@
 '''
 Autor: Mijie Pang
 Date: 2023-08-20 19:50:38
-LastEditTime: 2023-11-27 17:52:05
+LastEditTime: 2024-04-17 19:59:33
 Description: designed for a flexible map plot for globe
 '''
-import os
+import logging
 import warnings
 import numpy as np
+from time import time
 from datetime import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 # import matplotlib.ticker as mticker
-from matplotlib.colors import ListedColormap, Normalize, BoundaryNorm, LogNorm
+from matplotlib.colors import (ListedColormap, Normalize, BoundaryNorm,
+                               LogNorm, LinearSegmentedColormap)
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 # from cartopy.io.shapereader import Reader
 from cartopy.util import add_cyclic_point
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
 warnings.filterwarnings(action='ignore')
 
 
-class my_globe():
+class MyGlobe():
 
     def __init__(self,
-                 projection='default',
+                 projection=None,
                  central_longitude=180,
-                 figsize=[8, 5],
+                 figsize=(8, 5),
                  dpi=300,
-                 title='Created on %s' %
-                 (datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-                 display_axis=True,
+                 title=None,
+                 colors=None,
+                 bounds=None,
+                 cmap=None,
+                 norm_type=None,
+                 extend='max',
+                 axis=True,
+                 gridline=True,
                  ocean_mask=False) -> None:
 
-        print('Plot project initiated')
-        self.start = datetime.now()
+        logging.info('Plot project initiated')
+        self.start = time()
 
-        fig = plt.figure(figsize=figsize, dpi=dpi)
-        plt.rcParams['font.family'] = 'Times New Roman'
-        plt.rcParams['mathtext.default'] = 'regular'
-        plt.rcParams['axes.unicode_minus'] = False
-
-        if projection == 'default':
-
-            self.projection = ccrs.PlateCarree(
-                central_longitude=central_longitude)
-
-            # Label axes of a Plate Carree projection with a central longitude of 180:
-            ax = fig.add_subplot(1, 1, 1, projection=self.projection)
-            ax.set_global()
-            ax.coastlines(linewidth=0.6)
-
-            if central_longitude == 0:
-                ax.set_xticks([-180, -120, -60, 0, 60, 120, 180],
-                              crs=ccrs.PlateCarree())
-            elif central_longitude == 180:
-                ax.set_xticks([0, 60, 120, 180, 240, 300, 360],
-                              crs=ccrs.PlateCarree())
-
-            ax.set_yticks([-90, -60, -30, 0, 30, 60, 90],
-                          crs=ccrs.PlateCarree())
-            lon_formatter = LongitudeFormatter(zero_direction_label=True)
-            lat_formatter = LatitudeFormatter()
-            ax.xaxis.set_major_formatter(lon_formatter)
-            ax.yaxis.set_major_formatter(lat_formatter)
-
-        elif projection == 'robinson':
-
-            self.projection = ccrs.Robinson(
-                central_longitude=central_longitude)
-
-            ax = fig.add_subplot(1, 1, 1, projection=self.projection)
-
-            # make the map global rather than have it zoom in to
-            # the extents of any plotted data
-            ax.set_global()
-            # ax.stock_img()
-            ax.coastlines(linewidth=0.6)
-            ax.gridlines(linestyle='-', linewidth=0.3)
-            # ax.add_feature(cfeature.BORDERS, linestyle='-')  # add borders
-
-        ### turn on or off the axis ###
-        if not display_axis:
-            plt.axis('off')
-
-        ### set the title ###
-        if not title == False:
-            ax.set_title(title, {'size': 14, 'color': 'k'})
-
-        ### mask the ocean layer ###
-        if ocean_mask:
-            ax.add_feature(cfeature.OCEAN,
-                           facecolor='w',
-                           linewidth=0,
-                           zorder=100)
-
-        self.ax = ax
-        self.fig = fig
-        self.central_longitude = central_longitude
-
-    ### set the title ###
-    def set_title(self, title: str) -> None:
-
-        self.ax.set_title(title, {'size': 14, 'color': 'k'})
-
-    ### get all the artists ###
-    def get_artist(self, ) -> None:
-
-        return self.fig.get_children()
-
-    ### add the colorbar ###
-    def add_colorbar(
-            self,
-            #  position=[],
-            ticks_position='right',
-            orientation='vertical',
-            label=None,
-            label_position='right',
-            label_rotation=90,
-            labelpad=10,
-            colors=[
+        if colors is None:
+            colors = [
                 '#F0F0F0',
                 '#F0F096',
                 '#FA9600',
@@ -128,67 +52,156 @@ class my_globe():
                 '#6496FA',
                 '#1414FA',
                 '#141414',
-            ],
-            bounds=[0, 20, 40, 60, 80, 100, 120, 140],
+            ]
+        if bounds is None:
+            bounds = [0, 20, 40, 60, 80, 100, 120, 140]
+
+        fig = plt.figure(figsize=figsize, dpi=dpi)
+        plt.rcParams['font.family'] = 'Times New Roman'
+        plt.rcParams['mathtext.default'] = 'regular'
+        plt.rcParams['axes.unicode_minus'] = False
+
+        if projection is None:
+
+            self.projection = ccrs.PlateCarree(
+                central_longitude=central_longitude)
+
+        elif projection == 'robinson':
+
+            self.projection = ccrs.Robinson(
+                central_longitude=central_longitude)
+
+            # ax.gridlines(linestyle='-', linewidth=0.3)
+            # ax.add_feature(cfeature.BORDERS, linestyle='-')  # add borders
+
+        ax = fig.add_subplot(1, 1, 1, projection=self.projection)
+        ax.set_global()
+        ax.coastlines(linewidth=0.6)
+
+        self.ax = ax
+        self.central_longitude = central_longitude
+
+        # turn on or off the axis
+        if not axis:
+            plt.axis('off')
+
+        if gridline:
+            self.add_gridlines()
+
+        # set the title
+        if not title is None:
+            self.set_title(title)
+
+        ### mask the ocean layer ###
+        if ocean_mask:
+            self.ax.add_feature(cfeature.OCEAN,
+                                facecolor='w',
+                                linewidth=0,
+                                zorder=100)
+
+        cmap = self.set_colormap(cmap, colors, norm_type)
+        norm = self.set_norm(bounds, cmap, norm_type, extend)
+        self.cmap = cmap
+        self.norm = norm
+        self.bounds = bounds
+        self.extend = extend
+
+    ### *----------------------------------------* ###
+    ### *---   plot the base background map   ---* ###
+    ### *----------------------------------------* ###
+
+    ### set the title ###
+    def set_title(self, title: str, **kwargs) -> None:
+
+        self.ax.set_title(title, {'size': 14, 'color': 'k'}, **kwargs)
+
+    ### set the grid line ###
+    def add_gridlines(self, **kwargs) -> None:
+
+        gl = self.ax.gridlines(draw_labels=True,
+                               x_inline=False,
+                               y_inline=False,
+                               linewidth=0.1,
+                               color='gray',
+                               alpha=0.8,
+                               linestyle='--',
+                               **kwargs)
+        gl.top_labels = False
+        gl.right_labels = False
+
+    @staticmethod
+    def set_colormap(cmap: str, colors: list, cmap_type=None) -> object:
+
+        if cmap is None:
+            if cmap_type is None:
+                cmap = ListedColormap(colors)
+            elif cmap_type in ('continuous', 'c'):
+                cmap = LinearSegmentedColormap.from_list('mymap', colors)
+        else:
+            cmap = plt.get_cmap(cmap)
+
+        return cmap
+
+    @staticmethod
+    def set_norm(bounds: list,
+                 cmap: list,
+                 norm_type=None,
+                 extend=None) -> object:
+
+        if norm_type is None:
+            return BoundaryNorm(bounds, cmap.N, extend=extend)
+        elif norm_type in ('log', 'l'):
+            return LogNorm(vmin=np.min(bounds),
+                           vmax=np.max(bounds),
+                           extend=extend)
+        elif norm_type in ('continuous', 'c'):
+            return Normalize(vmin=np.min(bounds), vmax=np.max(bounds))
+        else:
+            raise ValueError('Unrecognized norm type : %s' % (norm_type))
+
+    ### *--- add the colorbar ---* ###
+    def add_colorbar(
+            self,
             cmap=None,
-            extend='max',
+            norm=None,
+            bounds=None,
+            extend=None,
+            #  position=[],
+            ticks_position='right',
+            orientation='vertical',
+            label=None,
+            label_position='right',
+            label_rotation=90,
+            labelpad=10,
             shrink=0.6,
             aspect=20,
             fraction=0.03,
             pad=0.01,
-            norm='default',
-            display=True,
             **kwargs) -> None:
 
-        ### set the cmap and colorbar ###
-        if cmap is not None:
-            cmap = plt.get_cmap(cmap)
-        else:
-            cmap = ListedColormap(colors)
+        # position = self.fig.add_axes(position)
+        cbar = plt.colorbar(
+            mpl.cm.ScalarMappable(cmap=cmap or self.cmap,
+                                  norm=norm or self.norm),
+            ax=self.ax,
+            # boundaries=bounds or self.bounds,  # Adding values for extensions.
+            extend=extend or self.extend,  # {'neither', 'both', 'min', 'max'}
+            orientation=orientation,
+            ticks=bounds or self.bounds,
+            # cax=position,
+            shrink=shrink,
+            pad=pad,
+            aspect=aspect,  # change the width
+            fraction=fraction,  # change the size fraction
+            label=label,
+            **kwargs)
 
-        if norm == 'default':
-            boundaries = bounds
-            norm = BoundaryNorm(bounds, cmap.N, extend=extend)
+        cbar.ax.yaxis.set_ticks_position(ticks_position)
 
-        elif norm == 'log':
-            boundaries = bounds
-            norm = LogNorm(vmin=np.min(bounds),
-                           vmax=np.max(bounds),
-                           extend=extend)
+        cbar.set_label(label, rotation=label_rotation, labelpad=labelpad)
+        cbar.ax.yaxis.set_label_position(label_position)
 
-        elif norm == 'continous':
-            boundaries = None
-            norm = Normalize(vmin=np.min(bounds), vmax=np.max(bounds))
-
-        if display:
-
-            # position = self.fig.add_axes(position)
-            cbar = plt.colorbar(
-                mpl.cm.ScalarMappable(cmap=cmap, norm=norm),
-                ax=self.ax,
-                boundaries=boundaries,  # Adding values for extensions.
-                extend=extend,  # {'neither', 'both', 'min', 'max'}
-                orientation=orientation,
-                ticks=bounds,
-                # cax=position,
-                shrink=shrink,
-                pad=pad,
-                aspect=aspect,  # change the width
-                fraction=fraction,  # change the size fraction
-                **kwargs)
-
-            cbar.ax.yaxis.set_ticks_position(ticks_position)
-
-            cbar.set_label(label, rotation=label_rotation, labelpad=labelpad)
-            cbar.ax.yaxis.set_label_position(label_position)
-
-            # print(cbar.ax.get_position())
-
-        self.norm = norm
-        self.cmap = cmap
-        self.bounds = bounds
-
-    ### plot scatter ###
+    ### *--- plot scatter ---* ###
     def scatter(self,
                 lon: np.ndarray,
                 lat: np.ndarray,
@@ -230,7 +243,8 @@ class my_globe():
                              c=value,
                              edgecolor=edgecolor,
                              linewidths=linewidths,
-                             transform=self.projection,
+                             transform=ccrs.PlateCarree(
+                                 central_longitude=self.central_longitude),
                              cmap=cmap,
                              norm=norm,
                              marker=marker,
@@ -239,13 +253,13 @@ class my_globe():
 
         return sc.get_children()
 
-    ### plot contour with line ###
+    ### *--- plot contour with line ---* ###
     def contourf(self,
                  lon: np.ndarray,
                  lat: np.ndarray,
                  data: np.ndarray,
-                 levels=10,
-                 add_cyclic=True,
+                 levels=None,
+                 add_cyclic=False,
                  meshgrid=True,
                  hide_line=True,
                  **kwargs) -> None:
@@ -270,14 +284,14 @@ class my_globe():
             lon,
             lat,
             data,
-            levels=levels,
+            levels=levels or self.bounds,
             transform=ccrs.PlateCarree(
                 central_longitude=self.central_longitude),
             cmap=self.cmap,
             norm=self.norm,
             **kwargs)
 
-    ### plot quivers ###
+    ### *--- plot quivers ---* ###
     def quiver(self,
                lon: np.ndarray,
                lat: np.ndarray,
@@ -334,20 +348,18 @@ class my_globe():
             lon, lat = np.meshgrid(lon, lat)
 
         ### plot the quiver ###
-        self.quiver = self.ax.quiver(
-            lon,
-            lat,
-            wind_u,
-            wind_v,
-            color=color,
-            width=width,
-            scale=scale,
-            headwidth=headwidth,
-            transform=ccrs.PlateCarree(
-                central_longitude=self.central_longitude),
-            **kwargs)
+        self.quiver = self.ax.quiver(lon,
+                                     lat,
+                                     wind_u,
+                                     wind_v,
+                                     color=color,
+                                     width=width,
+                                     scale=scale,
+                                     headwidth=headwidth,
+                                     transform=self.projection,
+                                     **kwargs)
 
-    ### add the key to the quivers ###
+    ### *--- add the key to the quivers ---* ###
     def quiverkey(self,
                   key_position=[0.95, 1.02],
                   length=10,
@@ -369,26 +381,15 @@ class my_globe():
                           fontproperties=default_font,
                           **kwargs)
 
-    ### save figure ###
-    def save(self,
-             name='Dafault',
-             path='.',
-             create_dir=False,
-             **kwargs) -> None:
+    ### *--- save figure ---* ###
+    def save(self, name=None, **kwargs) -> None:
 
-        if create_dir:
-            if not os.path.exists(path):
-                os.makedirs(path)
+        name = datetime.now().strftime(
+            '%Y%m%d_%H%M%S') if name is None else name
 
-        if not name.endswith(('.jpg', '.png', '.tif', '.tiff', '.svg', '.svgz',
-                              '.eps', '.pdf', '.pgf', '.ps', '.raw', '.rgba')):
+        plt.savefig(name, bbox_inches='tight', **kwargs)
 
-            name = name + '.png'
-
-        plt.savefig(os.path.join(path, name), bbox_inches='tight', **kwargs)
-
-        print('Plot took %.2f s' %
-              ((datetime.now() - self.start).total_seconds()))
+        logging.info('Plot took %.2f s' % (time() - self.start))
 
     def close(self):
 
@@ -397,30 +398,25 @@ class my_globe():
 
 if __name__ == '__main__':
 
-    model_lon = np.linspace(0.125, 359.875, 1440)
-    model_lat = np.linspace(90, -90, 721)
-    data = np.random.uniform(940, 1060, [len(model_lat), len(model_lon)])
+    logging.basicConfig(level=logging.INFO)
+    model_lon = np.linspace(0.125, 359.875, 144)
+    model_lat = np.linspace(90, -90, 72)
+    data1 = np.random.uniform(940, 1060, [len(model_lat), len(model_lon)])
+    data2 = model_lon.reshape(1, -1) + model_lat.reshape(-1, 1) + 940
 
-    plot = my_globe(ocean_mask=True)
-    plot.add_colorbar(bounds=[940, 960, 980, 1000, 1020, 1040, 1060],
-                      cmap='jet',
-                      extend='both',
-                      norm='continous',
-                      label='hpa')
-    # plot.contourf(model_lon,
-    #               model_lat,
-    #               data,
-    #               levels=10,
-    #               hide_line=True,
-    #               alpha=0.8)
+    plot = MyGlobe(
+        bounds=[940, 960, 980, 1000, 1020, 1040, 1060],
+        cmap='jet',
+        extend='both',
+        norm_type='c',
+    )
+    plot.add_colorbar()
+    plot.contourf(model_lon, model_lat, data2, add_cyclic=False)
     plot.scatter(model_lon,
                  model_lat,
-                 data,
-                 size=0.1,
+                 data1,
+                 size=3,
                  meshgrid=True,
                  edgecolor=None)
-
-    plot.save('test.png', path='.')
+    plot.save('test.png')
     plot.close()
-
-    pass

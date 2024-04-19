@@ -1,13 +1,19 @@
 '''
 Autor: Mijie Pang
 Date: 2023-04-10 16:55:25
-LastEditTime: 2024-01-11 10:21:30
+LastEditTime: 2024-04-13 09:50:36
 Description: This is the whole logical route of the PyFilter system
 '''
 import os
 import sys
-import signal
-import subprocess
+import multiprocessing as mp
+
+import initial
+import prepare
+import Assimilation
+import post_asml
+import Model
+import post_model
 
 import system_lib as stl
 
@@ -17,19 +23,19 @@ pid = os.getpid()
 config_dir = './config'
 status_path = './Status.json'
 
-
-### *--- set a signal handler to
-#close the subproces when main process exits ---* ###
-def handler(signum, frame):
-    command.terminate()
-
+stl.edit_json(
+    path=status_path,
+    new_dict={'system': {
+        'running': True,
+        'pid': pid,
+        'home_dir': home_dir
+    }})
 
 ### *--------------------------------------* ###
 ### *---    configure basic settings    ---* ###
 
 ### *--- read configuration from json files ---*###
 Config = stl.read_json_dict(config_dir, get_all=True)
-Status = stl.read_json(status_path)
 
 model_scheme = Config['Model']['scheme']['name']
 assimilation_scheme = Config['Assimilation']['scheme']['name']
@@ -37,15 +43,11 @@ system_project = '%s_%s' % (
     Config['Model'][model_scheme]['run_project'],
     Config['Assimilation'][assimilation_scheme]['project_name'])
 
-stl.edit_json(path=status_path,
-              new_dict={
-                  'system': {
-                      'running': True,
-                      'system_project': system_project,
-                      'pid': pid,
-                      'home_dir': home_dir
-                  }
-              })
+Status = stl.edit_json(
+    path=status_path,
+    new_dict={'system': {
+        'system_project': system_project,
+    }})
 
 ### *--------------------------------------* ###
 ###                                          ###
@@ -53,40 +55,30 @@ stl.edit_json(path=status_path,
 ###                                          ###
 ### *--------------------------------------* ###
 
-system_log = stl.Logging(os.path.join(home_dir, system_project + '.log'))
+system_log = stl.Logging(home_dir, **Config['Info']['System'])
 system_log.write(stl.welcome())
 system_log.info('PyFilter system started')
 system_log.info('PID : %s \n' % (pid))
 
 ### *---------------------------------------* ###
 ### *---   initialization before start   ---* ###
-destination = os.path.join(home_dir, 'initial')
-system_log.write('### Now I am in %s ###' % (destination))
+system_log.info('Now I am running Initialization')
 
-os.chdir(destination)
-command = subprocess.Popen(
-    [Config['Info']['path']['my_python'], '-u', 'run_initial.py'],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT)
-os.chdir(home_dir)
+initial_process = mp.Process(target=initial.entrance,
+                             name='initial',
+                             args=(Config, ))
+initial_process.start()
+initial_process.join()
 
-### *--- record the outputs ---* ###
-signal.signal(signal.SIGINT, handler)
-signal.signal(signal.SIGTERM, handler)
-for info in iter(command.stdout.readline, b''):
-    system_log.write(bytes.decode(info).strip())
-
-### *--- check the return code ---* ###
-command.wait()
-if not command.returncode == 0:
-    system_log.critical('ERROR happened during initialization.')
-    sys.exit(-1)
-elif command.returncode == 0:
-    system_log.info('Initialization finished.')
+exit_code = initial_process.exitcode
+if exit_code != 0:
+    system_log.critical(
+        'Something is wrong in initialization! System aborted.')
+    sys.exit(exit_code)
 
 ### *--- generate the run time list ---* ###
-asml_time_list, model_time_list = stl.get_run_time(
-    Config['Initial']['generate_run_time'])
+rt = stl.RunTime()
+asml_time_list, model_time_list = rt.get(Config['Initial']['run_time'])
 
 ### *---------------------------------* ###
 ### *---    start the main loop    ---* ###
@@ -96,44 +88,31 @@ for i_time in range(len(asml_time_list)):
     system_log.write(stl.number_guide(i_time + 1))
 
     ### initialize the status ###
-    stl.edit_json(path=status_path,
-                  new_dict={
-                      'assimilation': {
-                          'code': 0,
-                          'assimilation_time': asml_time_list[i_time],
-                          'post_process_code': 0
-                      },
-                      'model': {
-                          'code': 0,
-                          'post_process_code': 0
-                      }
-                  })
+    Status = stl.edit_json(path=status_path,
+                           new_dict={
+                               'assimilation': {
+                                   'code': 0,
+                                   'assimilation_time': asml_time_list[i_time],
+                                   'post_process_code': 0
+                               },
+                               'model': {
+                                   'code': 0,
+                                   'post_process_code': 0
+                               }
+                           })
 
     ### *-------------------------------------------* ###
     ### *---   preparation before assimilation   ---* ###
-    destination = os.path.join(home_dir, 'prepare')
-    system_log.write('### Now I am in %s ###' % (destination))
+    system_log.info('Now I am running preparation')
 
-    os.chdir(destination)
-    command = subprocess.Popen(
-        [Config['Info']['path']['my_python'], '-u', 'run_prepare.py'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT)
-    os.chdir(home_dir)
-
-    ### *--- record the outputs ---* ###
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-    for info in iter(command.stdout.readline, b''):
-        system_log.write(bytes.decode(info).strip())
-
-    ### *--- check the return code ---* ###
-    command.wait()
-    if not command.returncode == 0:
-        system_log.error('ERROR happened during preparation.')
-        sys.exit(-1)
-    elif command.returncode == 0:
-        system_log.info('Preparation finished.\n')
+    prepare_process = mp.Process(target=prepare.entrance,
+                                 name='prepare',
+                                 args=(
+                                     Config,
+                                     Status,
+                                 ))
+    prepare_process.start()
+    prepare_process.join()
 
     ### *---------------------------------------------* ###
     ###                                                 ###
@@ -155,19 +134,15 @@ for i_time in range(len(asml_time_list)):
 
         ### *-------------------------------------* ###
         ### *--- run the assimilation analysis ---* ###
-        destination = os.path.join(home_dir, 'Assimilation')
-        system_log.write('### Now I am in %s ###' % (destination))
+        system_log.info('Now I am running Assimilation')
 
-        os.chdir(destination)
-        command = subprocess.Popen(
-            [Config['Info']['path']['my_python'], '-u', 'run_assimilation.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
-        os.chdir(home_dir)
+        assimilation_process = mp.Process(target=Assimilation.entrance,
+                                          name='Assimilation',
+                                          args=(Config, ))
+        assimilation_process.start()
+        # assimilation_process.join()
 
         ### *--- wait until assimilation finish ---* ###
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
         status = stl.check_status_code('Status.json', 'assimilation', 'code')
         if status < 0:
             system_log.critical(
@@ -178,66 +153,48 @@ for i_time in range(len(asml_time_list)):
 
         ### *----------------------------------------------------* ###
         ### *---  perform post processing after assimilation  ---* ###
-        destination = os.path.join(home_dir, 'post_process')
-        system_log.write('### Now I am in %s ###' % (destination))
-        system_log.info('Post processing started')
+        system_log.info('Now I am running post assimilation process')
 
-        ### *--- save assimilated files and plot ---* ###
-        os.chdir(destination)
-        command = subprocess.Popen([
-            Config['Info']['path']['my_python'], '-u', 'post_assimilation.py'
-        ],
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT)
-        os.chdir(home_dir)
+        post_asml_process = mp.Process(target=post_asml.entrance,
+                                       name='post_asml',
+                                       args=(
+                                           Config,
+                                           Status,
+                                       ))
+        post_asml_process.start()
 
-        ### *--- wait until post-processing finish ---* ###
-        while command.poll() is None:
-            output = command.stdout.readline().decode().strip()
-            if output == 'continue':
-                system_log.info('Post processing finished.\n')
-                break
-
-    ### *----------------------------------------------* ###
-    ###                                                  ###
-    ###                    Model Part                    ###
-    ###                                                  ###
-    ### *----------------------------------------------* ###
+    ### *--------------------------------------------* ###
+    ###                                                ###
+    ###                   Model Part                   ###
+    ###                                                ###
+    ### *--------------------------------------------* ###
 
     ### *--- check run time range to decide if run the model ---* ###
-    if model_time_list == []:
-
+    if model_time_list is None:
         system_log.warning('Model forecast skipped')
-
     else:
-
-        stl.edit_json(path=status_path,
-                      new_dict={
-                          'model': {
-                              'start_time': model_time_list[i_time][0],
-                              'end_time': model_time_list[i_time][1],
-                          }
-                      })
+        Status = stl.edit_json(path=status_path,
+                               new_dict={
+                                   'model': {
+                                       'start_time':
+                                       model_time_list[i_time][0],
+                                       'end_time': model_time_list[i_time][1],
+                                   }
+                               })
 
         ### *----------------------------------* ###
         ### *---     start to run model     ---* ###
-        destination = os.path.join(home_dir, 'Model')
-        system_log.write('### Now I am in %s ###' % (destination))
+        system_log.write('Now I am running Model')
         system_log.write(
             'Model will run from %s to %s' %
             (model_time_list[i_time][0], model_time_list[i_time][1]))
 
-        ### *--- run the model ---* ###
-        os.chdir(destination)
-        command = subprocess.Popen(
-            [Config['Info']['path']['my_python'], '-u', 'run_model.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
-        os.chdir(home_dir)
+        model_process = mp.Process(target=Model.entrance,
+                                   name='Model',
+                                   args=(Config, ))
+        model_process.start()
+        model_process.join()
 
-        ### *--- wait until model forecast finish ---* ###
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
         status = stl.check_status_code('Status.json', 'model', 'code')
         if status < 0:
             system_log.critical('ERROR happened during model forecast.\n')
@@ -247,36 +204,24 @@ for i_time in range(len(asml_time_list)):
 
         ### *------------------------------------------------------* ###
         ### *---  perform post processing after model forecast  ---* ###
-        destination = os.path.join(home_dir, 'post_process')
-        system_log.write('### Now I am in %s ###' % (destination))
-        system_log.info('Post processing started')
+        system_log.info('Now I am running post model process')
+        queue = mp.Queue()
+        post_asml_process = mp.Process(target=post_model.entrance,
+                                       name='post_model',
+                                       args=(
+                                           Config,
+                                           Status,
+                                           queue,
+                                       ))
+        post_asml_process.start()
 
-        ### *--- do model post processing ---* ###
-        os.chdir(destination)
-        command = subprocess.Popen(
-            [Config['Info']['path']['my_python'], '-u', 'post_model.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
-        os.chdir(home_dir)
-
-        ### *--- wait until post-processing finish ---* ###
-        while command.poll() is None:
-            output = command.stdout.readline().decode().strip()
-            if output == 'continue':
-                system_log.info('Post processing finished.\n')
+        while True:
+            output = queue.get()
+            system_log.info(output)
+            if output == 'Please Go On':
+                system_log.info(
+                    'Post model process is done, moving to the next step.')
                 break
-            elif output == 'terminate':
-                system_log.error(
-                    'ERROR happened during model post-processing.\n')
-                sys.exit(status)
-                
-        # status = stl.check_status_code('Status.json', 'model',
-        #                                'post_process_code')
-        # if status < 0:
-        #     system_log.error('ERROR happened during model post-processing.\n')
-        #     sys.exit(status)
-        # elif status == 100:
-        #     system_log.info('Post processing finished.')
 
 ### *--- End of the System ---* ###
 system_log.info('All work done successfully.')

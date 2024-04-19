@@ -1,45 +1,48 @@
 '''
 Autor: Mijie Pang
 Date: 2023-04-24 19:36:09
-LastEditTime: 2023-12-10 07:58:31
+LastEditTime: 2024-04-04 17:42:51
 Description: guiding to the selected model and ensemble running method
 '''
 import os
 import sys
-import subprocess
+import logging
+import importlib
+import multiprocessing as mp
 
-sys.path.append('../')
+main_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(main_dir)
 import system_lib as stl
 
-config_dir = '../config'
-status_path = '../Status.json'
 
-### read configuration from json files ###
-Config = stl.read_json_dict(config_dir, 'Model.json', 'Info.json',
-                            'Script.json')
-Status = stl.read_json(path=status_path)
+def run(Config: dict, **kwargs):
 
-model_scheme = Config['Model']['scheme']['name']
+    ### *---------------------------------------* ###
+    ### *---   run the assimilation script   ---* ###
+    model_scheme = Config['Model']['scheme']['name']
+    module_name = Config['Script'][model_scheme]['Model'][
+        Config['Model'][model_scheme]['run_type']]
+    logging.info('Module name : %s' % module_name)
 
-### prepare log class ###
-system_log = stl.Logging(os.path.join(
-    Status['system']['home_dir'], Status['system']['system_project'] + '.log'),
-                         level=Config['Info']['System']['log_level'])
+    module = importlib.import_module('Model.%s' % module_name)
 
-### run the model script ###
-command = subprocess.Popen([
-    Config['Info']['path']['my_python'], Config['Script'][model_scheme]
-    ['Model'][Config['Model'][model_scheme]['run_type']]
-],
-                           stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT)
+    process = mp.Process(target=module.main, args=(Config, ), kwargs=kwargs)
+    process.start()
+    process.join()
 
-### record the outputs ###
-for info in iter(command.stdout.readline, b''):
-    system_log.debug(bytes.decode(info).strip())
+    ### *--- end of the process ---* ###
+    exit_code = process.exitcode
+    if exit_code != 0:
+        logging.error('Something is wrong!')
+        stl.edit_json(path=os.path.join(main_dir, 'Status.json'),
+                      new_dict={'model': {
+                          'code': -1
+                      }})
+        sys.exit(exit_code)
 
-command.wait()
-if not command.returncode == 0:
 
-    system_log.warning('something is wrong, check the log')
-    sys.exit(command.returncode)
+if __name__ == '__main__':
+    
+    stl.Logging()
+    Config = stl.read_json_dict(os.path.join(main_dir, 'config'), get_all=True)
+    run(Config)

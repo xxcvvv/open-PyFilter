@@ -11,7 +11,8 @@
         "random_node": true,
         "max_core_num": 32,
         "load_max": 30,
-        "mem_min": 30
+        "mem_min": 30,
+        "reserve": 32
     },
     "lotos-euros": {
         "path": {

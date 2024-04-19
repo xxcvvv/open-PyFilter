@@ -1,15 +1,13 @@
 '''
 Autor: Mijie Pang
 Date: 2023-04-22 19:53:41
-LastEditTime: 2024-01-04 20:25:44
+LastEditTime: 2024-04-17 19:25:52
 Description: 
 '''
 import re
 import os
 import time
 import json
-import random
-import inspect
 import logging
 import pandas as pd
 from glob import iglob
@@ -27,22 +25,16 @@ def read_json(path: str, mode='r') -> dict:
 def read_json_dict(path: str, get_all=False, *args) -> dict:
 
     load_dict = {}
-    ### read all the json files ###
+
     if get_all:
-
         json_files = iglob(os.path.join(path, '*.json'))
-        for json_file in json_files:
-
-            with open(json_file, 'r') as f:
-                load_dict.update(
-                    {os.path.split(json_file)[-1].split('.')[0]: json.load(f)})
-
-    ### only read given json files ###
     else:
+        json_files = [os.path.join(path, arg) for arg in args]
 
-        for arg in args:
-            with open(os.path.join(path, arg), 'r') as f:
-                load_dict.update({arg.split('.')[0]: json.load(f)})
+    for json_file in json_files:
+        with open(json_file, 'r') as f:
+            key = os.path.splitext(os.path.basename(json_file))[0]
+            load_dict[key] = json.load(f)
 
     return load_dict
 
@@ -59,7 +51,7 @@ def update_dict(dict1: dict, dict2: dict) -> dict:
     return dict1
 
 
-def edit_json(path: str, new_dict: dict) -> None:
+def edit_json(path: str, new_dict: dict) -> dict:
 
     with open(path, 'r') as jsonFile:
         data = json.load(jsonFile)
@@ -69,139 +61,81 @@ def edit_json(path: str, new_dict: dict) -> None:
     with open(path, 'w') as jsonFile:
         json.dump(data, jsonFile)
 
-
-### to count the process time of an function ###
-def timer(count=True):
-
-    def decorator(func):
-
-        def wrapper(*args, **kwargs):
-
-            start = datetime.now()
-            result = func(*args, **kwargs)
-            if count:
-                print('Func %s took ：%.2f s' %
-                      (func.__name__,
-                       (datetime.now() - start).total_seconds()))
-
-            return result
-
-        return wrapper
-
-    return decorator
+    return data
 
 
-### design for advanced log record ###
+### *--- design for advanced log record ---* ###
 class Logging:
 
-    def __init__(self, log_path: str, level='INFO') -> None:
+    def __init__(self,
+                 home_dir='.',
+                 log_name=None,
+                 log_level='INFO',
+                 **kwargs) -> None:
 
-        # log level : DEBUG -> INFO -> WARNING -> ERROR -> CRITICAL
+        self.home_dir = home_dir
+        self.log_name = kwargs.get('log_name', log_name)
+        self.log_level = kwargs.get('log_level', log_level)
 
-        frame = inspect.currentframe().f_back
-        filename = inspect.getframeinfo(frame).filename
-        basename = os.path.basename(filename)
+        log_path = os.path.join(self.home_dir,
+                                self.log_name) if self.log_name else None
 
-        if not log_path.endswith('.log'):
-            log_path += '.log'
+        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+        logging.getLogger('fiona').setLevel(logging.WARNING)
 
-        logging.basicConfig(
-            filename=log_path,
-            format='[%(levelname)s] %(asctime)s -> ' + basename +
-            ' : %(message)s',  # log format
-            filemode='a',
-            level=logging.getLevelName(level),  # log level 
-            datefmt='%Y-%m-%d %H:%M:%S')
-
-        self.logging = logging
-        self.log_path = log_path
-        self.level = level
-
-    def refresh(self, ) -> None:
-
-        logger = logging.getLogger()
-        for handler in logger.handlers:
-            logger.removeHandler(handler)
-
-        frame = inspect.currentframe().f_back
-        filename = inspect.getframeinfo(frame).filename
-        name = os.path.basename(filename)
-
-        self.logging.basicConfig(
-            filename=self.log_path,
-            format='[%(levelname)s] %(asctime)s -> ' + name +
-            ' : %(message)s',  # log format
-            filemode='a',
-            level=logging.getLevelName(self.level),  # log level 
-            datefmt='%Y-%m-%d %H:%M:%S')
-
-        self.logging = logging
+        logging.basicConfig(filename=log_path,
+                            format='[%(levelname)s] %(asctime)s : %(message)s',
+                            filemode='a',
+                            level=logging.getLevelName(self.log_level),
+                            datefmt='%Y-%m-%d %H:%M:%S')
 
     def debug(self, *words):
         for word in words:
-            self.logging.debug(word)
+            logging.debug(word)
 
     def info(self, *words):
         for word in words:
-            self.logging.info(word)
+            logging.info(word)
 
     def warning(self, *words):
         for word in words:
-            self.logging.warning(word)
+            logging.warning(word)
 
     def error(self, *words):
         for word in words:
-            self.logging.error(word)
+            logging.error(word)
 
     def critical(self, *words):
         for word in words:
-            self.logging.critical(word)
+            logging.critical(word)
 
-    def write(self, *words):
+    def write(
+        self,
+        *words,
+    ):
 
-        with open(self.log_path, 'a') as log_file:
-            for word in words:
-                log_file.write(word + '\n')
+        self._temp_change_formatter(logging.Formatter('%(message)s'))
+        try:
+            if self.log_name is None:
+                self.info(*words)
+            else:
+                with open(os.path.join(self.home_dir, self.log_name),
+                          'a') as log_file:
+                    for word in words:
+                        log_file.write(word + '\n')
+        finally:
+            self._restore_original_formatter()
 
+    def _temp_change_formatter(self, new_formatter):
+        self.original_formatters = []
+        for handler in logging.root.handlers:
+            self.original_formatters.append(handler.formatter)
+            handler.setFormatter(new_formatter)
 
-### mark the number of the assimilation loop ###
-def number_guide(number: int) -> str:
-
-    line='\n######--------------------######\n'+\
-         '######      Round {:0>4d}    ######\n'.format(number)+\
-         '######--------------------######'
-
-    return line
-
-
-### get the list of all assimilation moments ###
-def get_run_time(config: dict) -> list:
-
-    scheme = config['scheme']
-
-    if scheme == 'equal_step':
-
-        asml_time_list = pd.date_range(
-            datetime.strptime(config[scheme]['first_run_time'],
-                              '%Y-%m-%d %H:%M:%S'),
-            datetime.strptime(config[scheme]['last_run_time'],
-                              '%Y-%m-%d %H:%M:%S'),
-            freq=config[scheme]['asml_time_interval'])
-
-        asml_time_list = asml_time_list.strftime(
-            '%Y-%m-%d %H:%M:%S').tolist()  # type : str
-
-        model_time_list = get_end_time(asml_time_list,
-                                       config[scheme]['run_time_range'])
-
-    elif scheme == 'assign':
-        pass
-
-    else:
-        raise ValueError('run time generation method : %s is not supported' %
-                         (scheme))
-
-    return asml_time_list, model_time_list
+    def _restore_original_formatter(self):
+        for handler, formatter in zip(logging.root.handlers,
+                                      self.original_formatters):
+            handler.setFormatter(formatter)
 
 
 ### calculate the end time of model run ###
@@ -211,23 +145,16 @@ def get_end_time(start_time: list, duration_str: str) -> list:
     pattern = r'(\d+)([A-Za-z]+)'
     durations = re.findall(pattern, duration_str)
 
+    time_units = {'D': 'days', 'H': 'hours', 'M': 'minutes', 'S': 'seconds'}
     delta = timedelta()
     for amount, unit in durations:
-        if unit == 'D':
-            delta += timedelta(days=int(amount))
-        elif unit == 'H':
-            delta += timedelta(hours=int(amount))
-        elif unit == 'M':
-            delta += timedelta(minutes=int(amount))
-        elif unit == 'S':
-            delta += timedelta(seconds=int(amount))
+        if unit in time_units:
+            kwargs = {time_units[unit]: int(amount)}
+            delta += timedelta(**kwargs)
 
     if delta.total_seconds() == 0:
-
-        return []
-
+        return None
     else:
-
         end_time = []
         for i_time in range(len(start_time)):
             start_time_temp = datetime.strptime(start_time[i_time],
@@ -238,6 +165,49 @@ def get_end_time(start_time: list, duration_str: str) -> list:
         time_list = [[a, b] for a, b in zip(start_time, end_time)]
 
         return time_list
+
+
+class RunTime:
+
+    def __init__(self) -> None:
+
+        self.methods = {'equal_step': self.equal_step, 'assign': self.assign}
+
+    def get(self, config: dict) -> list:
+
+        self.scheme = config['scheme']
+        if not self.scheme in self.methods:
+            raise ValueError(
+                'Run time generation method : %s is not supported' %
+                (self.scheme))
+
+        return self.methods.get(self.scheme)(config[self.scheme])
+
+    ### *--- get the list of all assimilation moments ---* ###
+    def equal_step(self, config: dict) -> list:
+
+        asml_time_list = pd.date_range(
+            datetime.strptime(config['first_run_time'], '%Y-%m-%d %H:%M:%S'),
+            datetime.strptime(config['last_run_time'], '%Y-%m-%d %H:%M:%S'),
+            freq=config['asml_time_interval'])
+
+        asml_time_list = asml_time_list.strftime(
+            '%Y-%m-%d %H:%M:%S').tolist()  # type : str
+
+        model_time_list = get_end_time(asml_time_list,
+                                       config['run_time_range'])
+
+        return asml_time_list, model_time_list
+
+    def assign(self, config: dict) -> list:
+
+        df = pd.read_csv(config['path'])
+        asml_time_list = list(df.iloc[:, 0])
+        model_time_list = df.iloc[:, 1]
+        model_time_list = None if model_time_list.isnull().all() else list(
+            model_time_list)
+
+        return asml_time_list, model_time_list
 
 
 ### split the list into few parts ###
@@ -254,164 +224,46 @@ def split_list(lst: list, num_parts: int) -> list:
     return result
 
 
-### check and wait until the part finishes ###
-def check_for_status(path: str,
-                     section: str,
-                     key: str,
-                     interval=3,
-                     check_start=True) -> str:
-
-    if check_start:
-
-        ### make sure it starts ###
-        wait_start_flag = True
-        while wait_start_flag:
-
-            with open(path, 'r') as f:
-                status = json.load(f)[section][key]
-
-            if status == 'T' or status == 'E':
-                wait_start_flag = False
-
-            elif status == 'F':
-                time.sleep(interval)
-
-    ### check if it is finished ###
-    wait_finish_flag = True
-    while wait_finish_flag:
-
-        with open(path, 'r') as f:
-            status = json.load(f)[section][key]
-
-        if status == 'F' or status == 'E':
-            wait_finish_flag = False
-
-        elif status == 'T':
-            time.sleep(interval)
-
-    return status
-
-
-### check and wait until the part finishes ###
+### *--- check and wait until the part finishes ---* ###
 def check_status_code(path: str,
                       section: str,
                       key: str,
-                      interval=3,
+                      interval=1,
                       check_start=True) -> int:
 
-    if check_start:
-
-        ### make sure it starts ###
-        wait_start_flag = True
-        while wait_start_flag:
-
-            with open(path, 'r') as f:
-                status = json.load(f)[section][key]
-
-            if not status == 0:
-                wait_start_flag = False
-            else:
-                time.sleep(interval)
-
-    ### check if it is finished ###
-    wait_finish_flag = True
-    while wait_finish_flag:
-
+    def read_status() -> int:
         with open(path, 'r') as f:
-            status = json.load(f)[section][key]
+            return json.load(f)[section][key]
 
-        if status == 100 or status < 0:
-            wait_finish_flag = False
-        else:
+    def wait_for_start() -> None:
+        while read_status() == 0:
             time.sleep(interval)
 
-    return status
+    def wait_for_finish() -> int:
+        status = read_status()
+        while status != 100 and status >= 0:
+            time.sleep(interval)
+            status = read_status()
+        return status
+
+    if check_start:
+        wait_for_start()
+
+    return wait_for_finish()
 
 
-### check the queue and get available node id ###
-def get_available_node(
-        demand=1,
-        black_list=['3', '4', '5', '12', '2', '10'],
-        return_type='number',
-        reserve=0,
-        wait_time=120,  # mins
-        random_choice=False,
-        management='SGE'):
+### mark the number of the assimilation loop ###
+def number_guide(number: int) -> str:
 
-    if management == 'SGE':
+    line='\n######--------------------######\n'+\
+         '######      Round {:0>4d}    ######\n'.format(number)+\
+         '######--------------------######'
 
-        for wait in range(wait_time):
-
-            available_num = []
-            available_str = []
-
-            process = os.popen('qstat -f')  # return file
-            lines = process.read().split('\n')
-            process.close()
-
-            for line in lines:
-
-                ### select the line contains the information about the node ###
-                if line.startswith('all.q@compute-'):
-                    node_id = (
-                        line.split('.')[1]).split('-')[2]  # single node number
-
-                    ### exclude the node in black list ###
-                    if not node_id in black_list:
-
-                        ### get the total and used core number of the node ###
-                        total = int((line.split('/')[2]).split(' ')[0])
-                        used = int(line.split('/')[1])
-
-                        ### decide if the node has enough core I need ###
-                        if reserve <= total - used - demand:
-                            available_num.append(
-                                [node_id, total - used - reserve])
-                            available_str.append(
-                                [line.split(' ')[0], total - used - reserve])
-
-            if available_num == []:
-                logging.warning('node busy')
-                time.sleep(60)
-            elif not available_num == []:
-                break
-
-        ### if there isn't enough available core detected in due time,
-        # return the false flag ###
-        if available_num == []:
-            logging.error('NO available core in due time (%s mins)' %
-                          (wait_time))
-            return False
-
-        ### decide which type of the result to return ###
-        # return a node number
-        if return_type == 'number':
-            node_id = available_num[0][0]
-            if random_choice:
-                node_id = random.choice(available_num)[0]
-            return int(node_id)
-
-        # return a node name string
-        elif return_type == 'str':
-            node_id = available_str[0][0]
-            if random_choice:
-                node_id = random.choice(available_str)[0]
-            return str(node_id)
-
-        # return a list contains all the available node number
-        elif return_type == 'number_list':
-            return available_num
-
-        # return a list contains all the available node string
-        elif return_type == 'str_list':
-            return available_str
-
-    else:
-        logging.error('Management : %s is not supported yet' % (management))
-        return False
+    return line
 
 
-### generate from "http://patorjk.com/software/taag/#p=display&h=0&v=0&f=Slant&t=PyFilter" ###
+### *--- introduce marker ---* ###
+# generate from "http://patorjk.com/software/taag/#p=display&h=0&v=0&f=Slant&t=PyFilter"
 def welcome() -> str:
 
     line =  ' _       __          __                                 \n' + \

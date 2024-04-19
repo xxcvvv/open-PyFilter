@@ -10,7 +10,7 @@ import concurrent.futures
 from datetime import datetime
 
 
-class era5_downloader:
+class ERA5Downloader:
 
     ### initialization ###
     def __init__(self,

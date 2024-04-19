@@ -3,6 +3,7 @@
         "name": "PyFilter",
         "version": 1.1,
         "log_level": "DEBUG",
+        "log_name": null,
         "forecast_mode": false
     },
     "User": {
